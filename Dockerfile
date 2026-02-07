@@ -14,9 +14,6 @@ COPY apps ./apps
 # Instala dependências
 RUN bun install
 
-# Build do monorepo (compila packages TypeScript)
-RUN bun run build
-
 # Variáveis de ambiente padrão
 ENV NODE_ENV=production
 ENV PORT=3333
