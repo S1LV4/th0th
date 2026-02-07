@@ -25,5 +25,6 @@ EXPOSE 3333
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3333/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Comando para iniciar a API (usa npx tsx para rodar TypeScript)
-CMD ["npx", "tsx", "apps/tools-api/src/index.ts"]
+# Comando para iniciar a API (usa bun diretamente)
+WORKDIR /app/apps/tools-api
+CMD ["bun", "run", "src/index.ts"]
