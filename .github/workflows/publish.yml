@@ -47,9 +47,12 @@ jobs:
       - name: Build all packages and apps
         run: bun run build
 
+      - name: Sync versions from root package.json
+        run: bun scripts/version-sync.ts
+
       - name: Resolve workspace dependencies
         run: |
-          VERSION=$(jq -r '.version' packages/shared/package.json)
+          VERSION=$(node -p "require('./package.json').version")
           echo "Resolving workspace:* → ^$VERSION"
 
           for pkg in packages/core/package.json apps/*/package.json; do
