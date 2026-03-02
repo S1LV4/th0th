@@ -11,3 +11,6 @@ export { GetOptimizedContextTool } from "./get_optimized_context.js";
 export { CompressContextTool } from "./compress_context.js";
 export { StoreMemoryTool } from "./store_memory.js";
 export { SearchMemoriesTool } from "./search_memories.js";
+export { CreateCheckpointTool } from "./create_checkpoint.js";
+export { RestoreCheckpointTool } from "./restore_checkpoint.js";
+export { ListCheckpointsTool } from "./list_checkpoints.js";

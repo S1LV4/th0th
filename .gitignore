@@ -13,7 +13,9 @@ build/
 .turbo/
 
 # Runtime data
-data/
+/data/
+apps/*/data/
+packages/*/data/
 *.db
 *.db-shm
 *.db-wal

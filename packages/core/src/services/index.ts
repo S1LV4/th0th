@@ -41,3 +41,27 @@ export {
   getModelsDevClient,
 } from "./pricing/models-dev-client.js";
 export type { ModelPricing } from "./pricing/models-dev-client.js";
+
+// Graph (knowledge graph over memories)
+export { MemoryGraphService } from "./graph/memory-graph.service.js";
+export { GraphStore } from "./graph/graph-store.js";
+export { GraphQueries } from "./graph/graph-queries.js";
+export { RelationExtractor } from "./graph/relation-extractor.js";
+export type {
+  MemoryRow as GraphMemoryRow,
+  MemoryRowWithEmbedding,
+  RelatedMemory,
+} from "./graph/types.js";
+
+// Memory (domain service + quality)
+export { MemoryService } from "./memory/memory-service.js";
+export type { Memory, ScoredMemory } from "./memory/memory-service.js";
+export { RedundancyFilter } from "./memory/redundancy-filter.js";
+export type { DuplicatePair, MergeResult, CleanupStats } from "./memory/redundancy-filter.js";
+export { MemoryClustering } from "./memory/memory-clustering.js";
+export type { MemoryCluster, ClusteringResult } from "./memory/memory-clustering.js";
+
+// Checkpoint (task state persistence)
+export { CheckpointManager } from "./checkpoint/checkpoint-manager.js";
+export { AutoCheckpointer } from "./checkpoint/auto-checkpointer.js";
+export type { AutoCheckpointerOptions, CheckpointTrigger } from "./checkpoint/auto-checkpointer.js";

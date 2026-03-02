@@ -315,6 +315,62 @@ File: `~/.config/opencode/opencode.json`
 
 ---
 
+## Configuring VSCode/Antigravity
+
+th0th integrates with VSCode Copilot and Antigravity via MCP (Model Context Protocol).
+
+### Quick Start
+
+```bash
+# 1. Setup th0th (if not done)
+./scripts/setup-local-first.sh
+bun install && bun run build
+
+# 2. Start API
+bun run start:api
+
+# 3. Configure VSCode/Antigravity
+./scripts/setup-vscode.sh
+
+# 4. Restart VSCode/Antigravity
+```
+
+### Manual Configuration
+
+Create `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "th0th": {
+      "command": "npx",
+      "args": ["@th0th-ai/mcp-client"],
+      "env": {
+        "TH0TH_API_URL": "http://localhost:3333"
+      }
+    }
+  }
+}
+```
+
+### Verify Integration
+
+In VSCode/Antigravity chat:
+
+```
+List all th0th tools
+```
+
+You should see 7 tools: `th0th_index`, `th0th_search`, `th0th_remember`, `th0th_recall`, `th0th_compress`, `th0th_optimized_context`, `th0th_analytics`.
+
+### Validation & Troubleshooting
+
+```bash
+# Validate integration
+./scripts/validate-vscode-integration.sh
+
+---
+
 ## Configuration
 
 Config file: `~/.config/th0th/config.json`
@@ -495,7 +551,6 @@ docker build --target mcp -t th0th-mcp .
 | `OLLAMA_BASE_URL` | `http://host.docker.internal:11434` | Ollama endpoint |
 | `OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text:latest` | Embedding model |
 | `OLLAMA_EMBEDDING_DIMENSIONS` | `768` | Embedding dimensions |
-| `RLM_LLM_ENABLED` | `false` | Enable LLM compression |
 | `MISTRAL_API_KEY` | - | Mistral API key |
 
 ### Data Persistence

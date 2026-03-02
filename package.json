@@ -1,6 +1,6 @@
 {
   "name": "th0th",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "th0th - Ancient knowledge keeper for modern code. Semantic search with 98% token reduction",
   "workspaces": [
@@ -19,7 +19,8 @@
     "bench:fixture:sicad": "bun run --filter @th0th/core bench:fixture:sicad",
     "bench:beir": "bun run --filter @th0th/core bench:beir",
     "lint": "turbo run lint",
-    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist"
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist",
+    "version:sync": "bun scripts/version-sync.ts"
   },
   "keywords": [
     "mcp",

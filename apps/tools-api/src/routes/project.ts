@@ -1,17 +1,46 @@
 /**
  * Project Routes
  *
+ * GET  /api/v1/project/list - Listar projetos indexados
  * POST /api/v1/project/index - Indexar projeto (assíncrono)
  * GET /api/v1/project/index/status/:jobId - Consultar status de indexação
  */
 
 import { Elysia, t } from "elysia";
-import { IndexProjectTool, GetIndexStatusTool } from "@th0th/core";
+import { IndexProjectTool, GetIndexStatusTool, sqliteVectorStore } from "@th0th/core";
 
 const indexProjectTool = new IndexProjectTool();
 const getIndexStatusTool = new GetIndexStatusTool();
 
 export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
+  .get(
+    "/list",
+    async () => {
+      try {
+        const projects = await sqliteVectorStore.listProjects();
+        return {
+          success: true,
+          data: {
+            projects,
+            total: projects.length,
+          },
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: (error as Error).message,
+        };
+      }
+    },
+    {
+      detail: {
+        tags: ["project"],
+        summary: "List indexed projects",
+        description:
+          "List all projects that have been indexed in the vector store, with document counts and metadata.",
+      },
+    },
+  )
   .post(
     "/index",
     async ({ body }) => {

@@ -351,6 +351,66 @@ export class SQLiteVectorStore implements IVectorStore {
   }
 
   /**
+   * List all indexed projects with stats
+   */
+  async listProjects(): Promise<Array<{
+    projectId: string;
+    projectPath: string | null;
+    documentCount: number;
+    totalSize: number;
+    lastIndexed: string | null;
+  }>> {
+    try {
+      const rows = this.db.prepare(`
+        SELECT 
+          project_id,
+          COUNT(*) as document_count,
+          SUM(LENGTH(content)) as total_size,
+          MAX(updated_at) as last_updated
+        FROM vector_documents
+        WHERE id NOT LIKE '_metadata:%'
+        GROUP BY project_id
+        ORDER BY last_updated DESC
+      `).all() as Array<{
+        project_id: string;
+        document_count: number;
+        total_size: number;
+        last_updated: number;
+      }>;
+
+      // Enrich with metadata from _metadata: documents
+      const metadataStmt = this.db.prepare(`
+        SELECT content FROM vector_documents 
+        WHERE id = ? AND project_id = ?
+      `);
+
+      return rows.map((row) => {
+        let projectPath: string | null = null;
+        try {
+          const meta = metadataStmt.get(`_metadata:${row.project_id}`, row.project_id) as { content: string } | undefined;
+          if (meta) {
+            const parsed = JSON.parse(meta.content);
+            projectPath = parsed.projectPath || null;
+          }
+        } catch {
+          // ignore parse errors
+        }
+
+        return {
+          projectId: row.project_id,
+          projectPath,
+          documentCount: row.document_count,
+          totalSize: row.total_size || 0,
+          lastIndexed: row.last_updated ? new Date(row.last_updated).toISOString() : null,
+        };
+      });
+    } catch (error) {
+      logger.error('Failed to list projects', error as Error);
+      return [];
+    }
+  }
+
+  /**
    * Get collection statistics
    */
   async getStats(projectId?: string): Promise<{

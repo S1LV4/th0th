@@ -763,13 +763,13 @@ export class ContextualSearchRLM {
   ): any {
     const parts: string[] = [];
 
-    if (vectorScore !== undefined && vectorRank !== undefined) {
+    if (vectorScore != null && vectorRank != null) {
       parts.push(
         `Vector: ${(vectorScore * 100).toFixed(1)}% (rank #${vectorRank + 1})`,
       );
     }
 
-    if (keywordScore !== undefined && keywordRank !== undefined) {
+    if (keywordScore != null && keywordRank != null) {
       parts.push(
         `Keyword: ${(keywordScore * 100).toFixed(1)}% (rank #${keywordRank + 1})`,
       );
@@ -781,12 +781,12 @@ export class ContextualSearchRLM {
 
     return {
       finalScore,
-      vectorScore,
-      keywordScore,
+      vectorScore: vectorScore ?? undefined,
+      keywordScore: keywordScore ?? undefined,
       rrfScore,
-      vectorRank: vectorRank !== undefined ? vectorRank + 1 : undefined,
-      keywordRank: keywordRank !== undefined ? keywordRank + 1 : undefined,
-      combinedRank: combinedRank !== undefined ? combinedRank + 1 : undefined,
+      vectorRank: vectorRank != null ? vectorRank + 1 : undefined,
+      keywordRank: keywordRank != null ? keywordRank + 1 : undefined,
+      combinedRank: combinedRank != null ? combinedRank + 1 : undefined,
       breakdown,
     };
   }

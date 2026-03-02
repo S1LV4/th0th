@@ -221,3 +221,177 @@ export interface ToolResponse<T = unknown> {
     latency?: number;
   };
 }
+
+/**
+ * Memory Edge Relation Types
+ */
+export enum MemoryRelationType {
+  DERIVED_FROM = 'DERIVED_FROM',
+  CONTRADICTS = 'CONTRADICTS',
+  SUPPORTS = 'SUPPORTS',
+  RELATES_TO = 'RELATES_TO',
+  SUPERSEDES = 'SUPERSEDES',
+  CAUSES = 'CAUSES',
+  RESOLVES = 'RESOLVES'
+}
+
+/**
+ * Memory Edge Interface
+ */
+export interface MemoryEdge {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  relationType: MemoryRelationType;
+  weight: number;
+  evidence?: string;
+  autoExtracted: boolean;
+  createdAt: Date;
+}
+
+/**
+ * Graph Query Options
+ */
+export interface GraphQueryOptions {
+  maxDepth?: number;
+  relationTypes?: MemoryRelationType[];
+  minWeight?: number;
+  limit?: number;
+  includeEvidence?: boolean;
+}
+
+/**
+ * Graph Path Result
+ */
+export interface GraphPath {
+  nodes: Memory[];
+  edges: MemoryEdge[];
+  length: number;
+  totalWeight: number;
+}
+
+/**
+ * Contradiction Detection Result
+ */
+export interface ContradictionPair {
+  memory1: Memory;
+  memory2: Memory;
+  edge?: MemoryEdge;
+  evidence: string;
+}
+
+/**
+ * Relation Extraction Result
+ */
+export interface ExtractedRelation {
+  relation: MemoryRelationType | 'NONE';
+  confidence: number;
+  evidence: string;
+}
+
+// ── Checkpointing Types ──────────────────────────────────────
+
+/**
+ * Checkpoint types
+ */
+export enum CheckpointType {
+  AUTO = 'auto',
+  MANUAL = 'manual',
+  MILESTONE = 'milestone',
+}
+
+/**
+ * Task status for checkpointed tasks
+ */
+export enum TaskStatus {
+  PENDING = 'pending',
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  PAUSED = 'paused',
+}
+
+/**
+ * Progress tracking within a task
+ */
+export interface TaskProgress {
+  total: number;
+  completed: number;
+  currentStep: string;
+  percentage: number;
+}
+
+/**
+ * Accumulated context during task execution
+ */
+export interface TaskContext {
+  /** Memory IDs of decisions made during the task */
+  decisions: string[];
+  /** File paths read during the task */
+  filesRead: string[];
+  /** File paths modified during the task */
+  filesModified: string[];
+  /** Errors encountered */
+  errors: Array<{ message: string; timestamp: number; step?: string }>;
+  /** Key learnings or insights */
+  learnings: string[];
+}
+
+/**
+ * Agent execution state
+ */
+export interface AgentState {
+  lastAction: string;
+  nextAction?: string;
+  pendingValidations: string[];
+}
+
+/**
+ * Full serializable task state for checkpointing
+ */
+export interface TaskState {
+  taskId: string;
+  description: string;
+  status: TaskStatus;
+  progress: TaskProgress;
+  context: TaskContext;
+  agentState: AgentState;
+  startedAt: number;
+  lastCheckpointAt: number;
+  checkpointCount: number;
+}
+
+/**
+ * Stored checkpoint record
+ */
+export interface TaskCheckpoint {
+  id: string;
+  taskId: string;
+  taskDescription?: string;
+  agentId?: string;
+  projectId?: string;
+  state: TaskState;
+  /** Memory IDs relevant to this checkpoint */
+  memoryIds: string[];
+  /** Files changed since last checkpoint */
+  fileChanges: string[];
+  checkpointType: CheckpointType;
+  parentCheckpointId?: string;
+  createdAt: number;
+  expiresAt?: number;
+}
+
+/**
+ * Result of restoring a checkpoint
+ */
+export interface RestoreResult {
+  checkpoint: TaskCheckpoint;
+  /** Memories that were referenced but still exist */
+  validMemoryIds: string[];
+  /** Memories that were referenced but no longer exist */
+  missingMemoryIds: string[];
+  /** Files that changed on disk since checkpoint */
+  fileConflicts: string[];
+  /** Human-readable restore instructions */
+  restoreInstructions: string;
+}
