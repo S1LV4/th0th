@@ -5,7 +5,7 @@
  * Creates embeddings and FTS5 indexes for all relevant files.
  * 
  * Returns a jobId immediately and processes indexing in background.
- * Use th0th:get_index_status(jobId) to check progress.
+ * Use th0th_get_index_status(jobId) to check progress.
  */
 
 import { IToolHandler } from "@th0th/shared";
@@ -110,7 +110,7 @@ export class IndexProjectTool implements IToolHandler {
           projectPath,
           status: "started",
           message:
-            "Indexing started in background. Use th0th:get_index_status(jobId) to check progress.",
+            "Indexing started in background. Use th0th_get_index_status(jobId) to check progress.",
         },
       };
     } catch (error) {

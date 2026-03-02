@@ -60,13 +60,13 @@ th0th/
 
 | Tool | Description |
 |------|-------------|
-| `th0th:index` | Index a project directory for semantic search |
-| `th0th:search` | Semantic + keyword search with filters |
-| `th0th:remember` | Store important information in persistent memory |
-| `th0th:recall` | Search stored memories from previous sessions |
-| `th0th:compress` | Compress context (keeps structure, removes details) |
-| `th0th:optimized_context` | Search + compress in one call (max token efficiency) |
-| `th0th:analytics` | Usage patterns, cache performance, metrics |
+| `th0th_index` | Index a project directory for semantic search |
+| `th0th_search` | Semantic + keyword search with filters |
+| `th0th_remember` | Store important information in persistent memory |
+| `th0th_recall` | Search stored memories from previous sessions |
+| `th0th_compress` | Compress context (keeps structure, removes details) |
+| `th0th_optimized_context` | Search + compress in one call (max token efficiency) |
+| `th0th_analytics` | Usage patterns, cache performance, metrics |
 
 ---
 
@@ -76,7 +76,7 @@ th0th/
 
 ```bash
 # Via MCP tool
-th0th:index({
+th0th_index({
   projectPath: "/home/user/my-project",
   projectId: "my-project",
   forceReindex: false,
@@ -88,7 +88,7 @@ th0th:index({
 
 ```bash
 # Search for code patterns
-th0th:search({
+th0th_search({
   query: "authentication middleware JWT validation",
   projectId: "my-project",
   maxResults: 10,
@@ -103,7 +103,7 @@ th0th:search({
 
 ```bash
 # Store important decisions
-th0th:remember({
+th0th_remember({
   content: "Using PostgreSQL for user data, Redis for sessions",
   type: "decision",
   projectId: "my-project",
@@ -112,7 +112,7 @@ th0th:remember({
 })
 
 # Recall later
-th0th:recall({
+th0th_recall({
   query: "what database are we using?",
   types: ["decision"],
   projectId: "my-project"
@@ -123,7 +123,7 @@ th0th:recall({
 
 ```bash
 # Compress large code files
-th0th:compress({
+th0th_compress({
   content: "... 5000 lines of code ...",
   strategy: "code_structure",  # Keeps imports, signatures, exports
   targetRatio: 0.7             # 70% reduction
@@ -134,7 +134,7 @@ th0th:compress({
 
 ```bash
 # One call for maximum efficiency
-th0th:optimized_context({
+th0th_optimized_context({
   query: "how does authentication work?",
   projectId: "my-project",
   maxTokens: 4000,

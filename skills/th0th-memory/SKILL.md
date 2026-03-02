@@ -25,23 +25,23 @@ Reference these guidelines when:
 
 | Priority | Tool | Use |
 |----------|------|-----|
-| 1 | `th0th:index` | Index project before searching |
-| 2 | `th0th:search` | Semantic + keyword search with filters |
-| 3 | `th0th:optimized_context` | Search + compress in one call |
-| 4 | `th0th:remember` | Store important information |
-| 5 | `th0th:recall` | Retrieve memories from previous sessions |
-| 6 | `th0th:compress` | Reduce context size (70-98%) |
-| 7 | `th0th:analytics` | Usage patterns and metrics |
+| 1 | `th0th_index` | Index project before searching |
+| 2 | `th0th_search` | Semantic + keyword search with filters |
+| 3 | `th0th_optimized_context` | Search + compress in one call |
+| 4 | `th0th_remember` | Store important information |
+| 5 | `th0th_recall` | Retrieve memories from previous sessions |
+| 6 | `th0th_compress` | Reduce context size (70-98%) |
+| 7 | `th0th_analytics` | Usage patterns and metrics |
 | 8 | Glob/Grep/Read | Only when th0th doesn't find |
 
 ## Tool Reference
 
-### 1. th0th:index
+### 1. th0th_index
 
 Index a project directory for semantic search.
 
 ```
-th0th:index({
+th0th_index({
   projectPath: "/home/user/my-project",
   projectId: "my-project",
   forceReindex: false,
@@ -49,12 +49,12 @@ th0th:index({
 })
 ```
 
-### 2. th0th:search
+### 2. th0th_search
 
 Semantic + keyword search with RRF (Reciprocal Rank Fusion).
 
 ```
-th0th:search({
+th0th_search({
   query: "JWT authentication middleware",
   maxResults: 10,
   minScore: 0.3,
@@ -63,24 +63,24 @@ th0th:search({
 })
 ```
 
-### 3. th0th:optimized_context
+### 3. th0th_optimized_context
 
 Search + compress in one call. Maximum token efficiency.
 
 ```
-th0th:optimized_context({
+th0th_optimized_context({
   query: "how does authentication work?",
   maxTokens: 4000,
   maxResults: 5
 })
 ```
 
-### 4. th0th:remember
+### 4. th0th_remember
 
 Store important information in persistent memory.
 
 ```
-th0th:remember({
+th0th_remember({
   content: "Using PostgreSQL for user data",
   type: "decision",
   importance: 0.8,
@@ -88,12 +88,12 @@ th0th:remember({
 })
 ```
 
-### 5. th0th:recall
+### 5. th0th_recall
 
 Search stored memories from previous sessions.
 
 ```
-th0th:recall({
+th0th_recall({
   query: "database decisions",
   types: ["decision"],
   limit: 10,
@@ -101,24 +101,24 @@ th0th:recall({
 })
 ```
 
-### 6. th0th:compress
+### 6. th0th_compress
 
 Compress context (keeps structure, removes details).
 
 ```
-th0th:compress({
+th0th_compress({
   content: "...large code...",
   strategy: "code_structure",
   targetRatio: 0.7
 })
 ```
 
-### 7. th0th:analytics
+### 7. th0th_analytics
 
 Usage patterns, cache performance, metrics.
 
 ```
-th0th:analytics({
+th0th_analytics({
   type: "summary",
   limit: 10
 })
@@ -147,19 +147,19 @@ th0th:analytics({
 
 ```
 Need to find code?
-  → th0th:search (first)
+  → th0th_search (first)
   → Glob/Grep/Read (fallback)
 
 Need to understand architecture?
-  → th0th:recall (check memories first)
-  → th0th:search (explore code)
+  → th0th_recall (check memories first)
+  → th0th_search (explore code)
 
 Found important pattern/decision?
-  → th0th:remember (store for future)
+  → th0th_remember (store for future)
 
 Context too large?
-  → th0th:compress (reduce tokens)
+  → th0th_compress (reduce tokens)
 
 Maximum efficiency needed?
-  → th0th:optimized_context (search + compress)
+  → th0th_optimized_context (search + compress)
 ```

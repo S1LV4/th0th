@@ -167,7 +167,7 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
 
   return {
     tool: {
-      "th0th:search": tool({
+      "th0th_search": tool({
         description:
           "Semantic code search in indexed project. Uses hybrid vector + keyword search with RRF ranking. Returns relevant code snippets with file paths and line numbers.",
         args: {
@@ -193,7 +193,7 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
         },
       }),
 
-      "th0th:remember": tool({
+      "th0th_remember": tool({
         description:
           "Store important information in th0th memory. Persists across sessions. Use for: user preferences, architectural decisions, discovered patterns.",
         args: {
@@ -217,7 +217,7 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
         },
       }),
 
-      "th0th:recall": tool({
+      "th0th_recall": tool({
         description:
           "Search stored memories from previous sessions. Recovers decisions, patterns, and context.",
         args: {
@@ -241,7 +241,7 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
         },
       }),
 
-      "th0th:index": tool({
+      "th0th_index": tool({
         description:
           "Index the current project for semantic search. Async - returns jobId.",
         args: {
@@ -261,7 +261,7 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
         },
       }),
 
-      "th0th:compress": tool({
+      "th0th_compress": tool({
         description:
           "Compress context using semantic compression. Keeps structure, removes details. 70-98% token reduction.",
         args: {
@@ -281,7 +281,7 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
         },
       }),
 
-      "th0th:optimized_context": tool({
+      "th0th_optimized_context": tool({
         description:
           "Search + compress in one call. Maximum token efficiency for limited context budgets.",
         args: {
@@ -301,11 +301,11 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
         },
       }),
 
-      "th0th:index_status": tool({
+      "th0th_index_status": tool({
         description:
-          "Check the status and progress of an async indexing job. Use the jobId returned by th0th:index.",
+          "Check the status and progress of an async indexing job. Use the jobId returned by th0th_index.",
         args: {
-          jobId: tool.schema.string().describe("Job ID returned by th0th:index"),
+          jobId: tool.schema.string().describe("Job ID returned by th0th_index"),
         },
         async execute(args) {
           const result = await th0thGet(`/api/v1/project/index/status/${encodeURIComponent(args.jobId)}`)
@@ -313,7 +313,7 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
         },
       }),
 
-      "th0th:analytics": tool({
+      "th0th_analytics": tool({
         description: "Get th0th usage analytics and performance metrics.",
         args: {
           type: tool.schema.enum(["summary", "project", "cache", "recent"]).optional().default("summary"),

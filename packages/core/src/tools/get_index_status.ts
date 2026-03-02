@@ -16,13 +16,13 @@ interface GetIndexStatusParams {
 export class GetIndexStatusTool implements IToolHandler {
   name = "get_index_status";
   description =
-    "Get the status and progress of an async indexing job started with th0th:index";
+    "Get the status and progress of an async indexing job started with th0th_index";
   inputSchema = {
     type: "object",
     properties: {
       jobId: {
         type: "string",
-        description: "Job ID returned by th0th:index",
+        description: "Job ID returned by th0th_index",
       },
     },
     required: ["jobId"],

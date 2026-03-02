@@ -15,7 +15,7 @@ export interface ToolDefinition {
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
-    name: "th0th:index",
+    name: "th0th_index",
     description:
       "Index a project directory for contextual code search with semantic embeddings",
     apiEndpoint: "/api/v1/project/index",
@@ -54,9 +54,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: "th0th:index_status",
+    name: "th0th_index_status",
     description:
-      "Get the status of a background indexing job by its jobId. Use this after calling th0th:index to check progress.",
+      "Get the status of a background indexing job by its jobId. Use this after calling th0th_index to check progress.",
     apiEndpoint: "/api/v1/project/index/status/:jobId",
     apiMethod: "GET",
     inputSchema: {
@@ -64,14 +64,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       properties: {
         jobId: {
           type: "string",
-          description: "Job ID returned from th0th:index",
+          description: "Job ID returned from th0th_index",
         },
       },
       required: ["jobId"],
     },
   },
   {
-    name: "th0th:search",
+    name: "th0th_search",
     description:
       "Search for code in an indexed project using semantic and keyword search",
     apiEndpoint: "/api/v1/search/project",
@@ -134,7 +134,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: "th0th:remember",
+    name: "th0th_remember",
     description:
       "Store memory in the hierarchical memory system (local SQLite)",
     apiEndpoint: "/api/v1/memory/store",
@@ -177,7 +177,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: "th0th:recall",
+    name: "th0th_recall",
     description:
       "Search stored memories across sessions using semantic search (recovers context from previous conversations)",
     apiEndpoint: "/api/v1/memory/search",
@@ -231,7 +231,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: "th0th:compress",
+    name: "th0th_compress",
     description:
       "Compress context using semantic compression (keeps structure, removes details)",
     apiEndpoint: "/api/v1/context/compress",
@@ -266,7 +266,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: "th0th:optimized_context",
+    name: "th0th_optimized_context",
     description:
       "Retrieve and compress context with maximum token efficiency (search + compress)",
     apiEndpoint: "/api/v1/context/optimized",
@@ -301,7 +301,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: "th0th:analytics",
+    name: "th0th_analytics",
     description:
       "Get search analytics and performance metrics (usage patterns, cache performance, etc)",
     apiEndpoint: "/api/v1/analytics",
