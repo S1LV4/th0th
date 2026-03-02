@@ -21,12 +21,17 @@
     "./services": {
       "types": "./dist/services/index.d.ts",
       "default": "./dist/services/index.js"
+    },
+    "./controllers": {
+      "types": "./dist/controllers/index.d.ts",
+      "default": "./dist/controllers/index.js"
     }
   },
   "scripts": {
     "prebuild": "bunx prisma generate",
     "build": "tsc",
     "clean": "rm -rf dist",
+    "test": "bun test",
     "bench:fixture:sicad": "bun run src/scripts/create-sicad-beir-fixture.ts",
     "bench:beir": "bun run src/scripts/beir-benchmark.ts"
   },

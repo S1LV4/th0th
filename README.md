@@ -495,7 +495,6 @@ docker build --target mcp -t th0th-mcp .
 | `OLLAMA_BASE_URL` | `http://host.docker.internal:11434` | Ollama endpoint |
 | `OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text:latest` | Embedding model |
 | `OLLAMA_EMBEDDING_DIMENSIONS` | `768` | Embedding dimensions |
-| `RLM_LLM_ENABLED` | `false` | Enable LLM compression |
 | `MISTRAL_API_KEY` | - | Mistral API key |
 
 ### Data Persistence
