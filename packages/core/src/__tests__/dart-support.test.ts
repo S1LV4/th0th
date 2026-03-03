@@ -1,6 +1,6 @@
-import { describe, test, expect } from "bun:test";
-import { smartChunk } from "../services/search/smart-chunker.js";
+import { describe, expect, test } from "bun:test";
 import { CodeCompressor } from "../services/compression/code-compressor.js";
+import { smartChunk } from "../services/search/smart-chunker.js";
 
 describe("Dart support", () => {
   test("smart chunker treats .dart files as code", () => {
