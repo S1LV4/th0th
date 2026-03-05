@@ -23,12 +23,12 @@ import {
   SearchSource,
   RetrievalOptions,
   VectorDocument,
-} from "@th0th/shared";
-import { logger } from "@th0th/shared";
+} from "@th0th-ai/shared";
+import { logger } from "@th0th-ai/shared";
 import { KeywordSearch } from "../../data/sqlite/keyword-search.js";
 import { sqliteVectorStore } from "../../data/vector/sqlite-vector-store.js";
-import { estimateTokens } from "@th0th/shared";
-import { config } from "@th0th/shared";
+import { estimateTokens } from "@th0th-ai/shared";
+import { config } from "@th0th-ai/shared";
 import { IndexManager } from "./index-manager.js";
 import { SearchCache } from "./search-cache.js";
 import { SearchAnalytics } from "./search-analytics.js";

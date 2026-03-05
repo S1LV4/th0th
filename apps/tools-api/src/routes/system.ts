@@ -9,8 +9,8 @@
  */
 
 import { Elysia } from "elysia";
-import { config } from "@th0th/shared";
-import { getHealthChecker } from "@th0th/core";
+import { config } from "@th0th-ai/shared";
+import { getHealthChecker } from "@th0th-ai/core";
 import path from "path";
 import fs from "fs";
 import os from "os";

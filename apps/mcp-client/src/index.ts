@@ -14,7 +14,72 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { ApiClient } from "./api-client.js";
 import { TOOL_DEFINITIONS, getToolDefinition } from "./tool-definitions.js";
-import { configExists, initConfig } from "@th0th/shared/config";
+import { 
+  configExists, 
+  initConfig, 
+  loadConfig, 
+  getConfigPath,
+  getConfigDir 
+} from "@th0th-ai/shared/config";
+
+// Check for config-related flags before starting MCP server
+const args = process.argv.slice(2);
+
+if (args.includes("--config-show")) {
+  try {
+    const config = loadConfig();
+    console.log(JSON.stringify(config, null, 2));
+    process.exit(0);
+  } catch (error) {
+    console.error("Error loading config:", error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+if (args.includes("--config-path")) {
+  console.log(getConfigPath());
+  process.exit(0);
+}
+
+if (args.includes("--config-dir")) {
+  console.log(getConfigDir());
+  process.exit(0);
+}
+
+if (args.includes("--config-init")) {
+  try {
+    initConfig();
+    console.log(`Configuration initialized at: ${getConfigPath()}`);
+    process.exit(0);
+  } catch (error) {
+    console.error("Error initializing config:", error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(`
+th0th MCP Client
+
+Usage:
+  npx @th0th-ai/mcp-client [options]
+
+Options:
+  --config-show     Show current configuration
+  --config-path     Show config file path
+  --config-dir      Show config directory path
+  --config-init     Initialize configuration
+  --help, -h        Show this help message
+
+For advanced configuration, use the config CLI:
+  npx @th0th-ai/mcp-client th0th-config <command>
+
+Examples:
+  npx @th0th-ai/mcp-client --config-show
+  npx @th0th-ai/mcp-client --config-path
+`);
+  process.exit(0);
+}
 
 // Auto-configure on first run
 if (!configExists()) {
@@ -23,7 +88,7 @@ if (!configExists()) {
 [th0th] Initialized with default configuration
 [th0th] Config: ~/.config/th0th/config.json
 [th0th] Provider: Ollama (local, free)
-[th0th] To change: npx th0th-config use mistral --api-key YOUR_KEY
+[th0th] To change: npx @th0th-ai/mcp-client th0th-config use mistral --api-key YOUR_KEY
 `);
 }
 

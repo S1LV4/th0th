@@ -14,7 +14,7 @@ import {
   MemoryRelationType,
   config,
   logger,
-} from "@th0th/shared";
+} from "@th0th-ai/shared";
 
 interface EdgeRow {
   id: string;

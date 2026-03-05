@@ -10,7 +10,7 @@
  * Following RLM best practices for context window optimization
  */
 
-import { logger } from '@th0th/shared';
+import { logger } from '@th0th-ai/shared';
 import { getModelsDevClient } from '../pricing/models-dev-client.js';
 
 export interface SearchResult {

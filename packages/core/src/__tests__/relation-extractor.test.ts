@@ -6,13 +6,13 @@
  */
 
 import { describe, test, expect, mock, beforeAll, afterAll } from "bun:test";
-import { MemoryRelationType } from "@th0th/shared";
+import { MemoryRelationType } from "@th0th-ai/shared";
 
 // ── Mock dependencies ────────────────────────────────────────
 let tmpDir = "/tmp/th0th-test-relext";
 
-mock.module("@th0th/shared", () => {
-  const actual = require("@th0th/shared");
+mock.module("@th0th-ai/shared", () => {
+  const actual = require("@th0th-ai/shared");
   return {
     ...actual,
     MemoryRelationType: actual.MemoryRelationType,
@@ -34,6 +34,7 @@ mock.module("@th0th/shared", () => {
       warn: () => {},
       error: () => {},
       debug: () => {},
+      metric: () => {},
     },
   };
 });

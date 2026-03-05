@@ -11,8 +11,8 @@
  * - Automatic invalidation on index updates
  */
 
-import { SearchResult } from "@th0th/shared";
-import { logger } from "@th0th/shared";
+import { SearchResult } from "@th0th-ai/shared";
+import { logger } from "@th0th-ai/shared";
 import { Database } from "bun:sqlite";
 import crypto from "crypto";
 import path from "path";

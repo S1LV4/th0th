@@ -12,7 +12,7 @@ import { PrismaClient } from "../generated/prisma/index.js";
 import { PrismaBunSqlite } from "prisma-adapter-bun-sqlite";
 // @ts-ignore - bun:sqlite is a Bun built-in module
 import { Database } from "bun:sqlite";
-import { config } from "@th0th/shared";
+import { config } from "@th0th-ai/shared";
 import path from "path";
 
 const dataDir = config.get("dataDir");

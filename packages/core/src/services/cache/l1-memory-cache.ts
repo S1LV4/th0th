@@ -5,9 +5,9 @@
  */
 
 import { CacheEntry } from '../../models/CacheEntry.js';
-import { CacheLevel } from '@th0th/shared';
-import { config } from '@th0th/shared';
-import { logger } from '@th0th/shared';
+import { CacheLevel } from '@th0th-ai/shared';
+import { config } from '@th0th-ai/shared';
+import { logger } from '@th0th-ai/shared';
 
 /**
  * L1 Memory Cache with LRU eviction

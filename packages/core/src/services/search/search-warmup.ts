@@ -5,7 +5,7 @@
  * to improve initial search performance.
  */
 
-import { logger } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
 import { SearchAnalytics } from "./search-analytics.js";
 import { ContextualSearchRLM } from "./contextual-search-rlm.js";
 

@@ -15,7 +15,7 @@
  */
 
 import { createHash } from "crypto";
-import { logger, estimateTokens } from "@th0th/shared";
+import { logger, estimateTokens } from "@th0th-ai/shared";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

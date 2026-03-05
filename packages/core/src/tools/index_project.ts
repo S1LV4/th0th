@@ -8,10 +8,10 @@
  * Use th0th_get_index_status(jobId) to check progress.
  */
 
-import { IToolHandler } from "@th0th/shared";
-import { ToolResponse } from "@th0th/shared";
+import { IToolHandler } from "@th0th-ai/shared";
+import { ToolResponse } from "@th0th-ai/shared";
 import { ContextualSearchRLM } from "../services/search/contextual-search-rlm.js";
-import { logger } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
 import { indexJobTracker } from "../services/jobs/index-job-tracker.js";
 import path from "path";
 

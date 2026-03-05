@@ -12,7 +12,7 @@
  */
 
 import { minimatch } from "minimatch";
-import { logger } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
 
 interface FilterCacheEntry {
   files: Set<string>;

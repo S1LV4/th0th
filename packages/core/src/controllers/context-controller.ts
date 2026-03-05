@@ -6,7 +6,7 @@
  * to deliver token-efficient context to agents.
  */
 
-import { logger, estimateTokens } from "@th0th/shared";
+import { logger, estimateTokens } from "@th0th-ai/shared";
 import { SearchController } from "./search-controller.js";
 import { MemoryController } from "./memory-controller.js";
 import { CompressContextTool } from "../tools/compress_context.js";

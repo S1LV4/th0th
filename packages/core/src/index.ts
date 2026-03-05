@@ -1,5 +1,5 @@
 /**
- * @th0th/core - Lógica de negócio do th0th
+ * @th0th-ai/core - Lógica de negócio do th0th
  *
  * Contém tools, controllers, services, data e models
  * independente do protocolo de transporte (MCP, HTTP, etc.)
@@ -30,4 +30,4 @@ export type {
 export { sqliteVectorStore, SQLiteVectorStore } from "./data/vector/index.js";
 
 // Re-export types from shared for convenience
-export type { ToolResponse, IToolHandler } from "@th0th/shared";
+export type { ToolResponse, IToolHandler } from "@th0th-ai/shared";

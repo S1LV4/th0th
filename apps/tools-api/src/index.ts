@@ -8,7 +8,7 @@
  * Local-First: Funciona 100% offline com Ollama + SQLite.
  */
 
-import "@th0th/shared/config";
+import "@th0th-ai/shared/config";
 
 import { Elysia } from "elysia";
 import { node } from "@elysiajs/node";
@@ -22,7 +22,7 @@ import { analyticsRoutes } from "./routes/analytics.js";
 import { systemRoutes } from "./routes/system.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error.js";
-import { getHealthChecker } from "@th0th/core";
+import { getHealthChecker } from "@th0th-ai/core";
 
 const PORT = process.env.TH0TH_API_PORT || 3333;
 

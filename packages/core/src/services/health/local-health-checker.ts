@@ -10,8 +10,8 @@
  * - Data directory (permissões de leitura/escrita)
  */
 
-import { logger } from "@th0th/shared";
-import { config } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
+import { config } from "@th0th-ai/shared";
 import path from "path";
 import fs from "fs/promises";
 import { existsSync } from "fs";

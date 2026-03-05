@@ -1,6 +1,6 @@
 import type { Plugin, PluginInput } from "@opencode-ai/plugin"
 import { tool, type ToolContext } from "@opencode-ai/plugin"
-import { configExists, initConfig, loadConfig } from "@th0th/shared/config"
+import { configExists, initConfig, loadConfig } from "@th0th-ai/shared/config"
 
 // ---------------------------------------------------------------------------
 // Config

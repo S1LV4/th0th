@@ -1,5 +1,5 @@
 {
-  "name": "@th0th/opencode-plugin",
+  "name": "@th0th-ai/opencode-plugin",
   "version": "1.0.2",
   "description": "th0th plugin for OpenCode - Semantic code search, memory, and context compression",
   "type": "module",
@@ -19,13 +19,14 @@
   "dependencies": {
     "@opencode-ai/plugin": "^1.2.15",
     "@opencode-ai/sdk": "^1.2.15",
-    "@th0th/core": "workspace:*",
-    "@th0th/shared": "workspace:*"
+    "@th0th-ai/core": "workspace:*",
+    "@th0th-ai/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
     "typescript": "^5.8.3"
   },
+  "author": "S1LV4",
   "keywords": [
     "opencode",
     "plugin",
@@ -37,7 +38,6 @@
     "ai",
     "llm"
   ],
-  "author": "",
   "license": "MIT",
   "repository": {
     "type": "git",

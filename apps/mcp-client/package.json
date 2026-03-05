@@ -1,7 +1,8 @@
 {
-  "name": "@th0th/mcp-client",
+  "name": "@th0th-ai/mcp-client",
   "version": "1.0.2",
   "description": "th0th MCP server - Semantic code search, memory, and context compression via Model Context Protocol",
+  "author": "S1LV4",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -18,7 +19,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@th0th/shared": "workspace:*",
+    "@th0th-ai/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {

@@ -7,8 +7,8 @@
 
 import { createHash } from "crypto";
 import { Database } from "bun:sqlite";
-import { logger } from "@th0th/shared";
-import { config } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
+import { config } from "@th0th-ai/shared";
 
 export interface EmbeddingCacheEntry {
   provider: string;

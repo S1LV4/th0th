@@ -6,7 +6,7 @@
  * and embedding coordination. No DB calls — those live in MemoryRepository.
  */
 
-import { MemoryType, MemoryLevel } from "@th0th/shared";
+import { MemoryType, MemoryLevel } from "@th0th-ai/shared";
 import { EmbeddingService } from "../../data/chromadb/vector-store.js";
 import type { MemoryRow } from "../../data/memory/memory-repository.js";
 

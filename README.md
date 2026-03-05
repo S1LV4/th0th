@@ -18,6 +18,11 @@ bun install
 
 # 2. Setup (100% offline with Ollama)
 ./scripts/setup-local-first.sh
+# This will:
+# - Install/start Ollama
+# - Pull nomic-embed-text:latest model
+# - Create ~/.config/th0th/config.json
+# - Create .env file with defaults
 
 # 3. Build and start
 bun run build
@@ -25,6 +30,9 @@ bun run start:api
 ```
 
 Verify: `curl http://localhost:3333/health`
+
+**Note**: The setup script creates a `.env` file at the project root with default values. 
+The API runs in `apps/tools-api/` directory and will load environment variables from the root `.env` automatically.
 
 ---
 
@@ -41,7 +49,7 @@ File: `~/.config/opencode/opencode.json`
   "mcpServers": {
     "th0th": {
       "type": "local",
-      "command": ["bunx", "@th0th-ai/mcp-client"],
+        "command": ["bunx", "@th0th-ai/mcp-client"],
       "env": {
         "TH0TH_API_URL": "http://localhost:3333"
       },
@@ -55,7 +63,7 @@ File: `~/.config/opencode/opencode.json`
 
 ```json
 {
-  "plugin": ["@th0th/opencode-plugin"]
+  "plugin": ["@th0th-ai/opencode-plugin"]
 }
 ```
 
@@ -82,7 +90,7 @@ Create `.vscode/mcp.json` in your workspace:
   "servers": {
     "th0th": {
       "command": "bunx",
-      "args": ["@th0th-ai/mcp-client"],
+        "args": ["@th0th-ai/mcp-client"],
       "env": {
         "TH0TH_API_URL": "http://localhost:3333"
       }
@@ -165,6 +173,25 @@ curl -X POST http://localhost:3333/api/v1/context/compress \
 
 Config file: `~/.config/th0th/config.json` (auto-created on first run)
 
+### Quick Config Commands
+
+```bash
+# Show current configuration
+npx @th0th-ai/mcp-client --config-show
+
+# Show config file path
+npx @th0th-ai/mcp-client --config-path
+
+# Show config directory
+npx @th0th-ai/mcp-client --config-dir
+
+# Initialize configuration
+npx @th0th-ai/mcp-client --config-init
+
+# Show help
+npx @th0th-ai/mcp-client --help
+```
+
 ### Embedding Providers
 
 | Provider | Model | Cost | Quality |
@@ -173,13 +200,22 @@ Config file: `~/.config/th0th/config.json` (auto-created on first run)
 | **Mistral** | mistral-embed, codestral-embed | $$ | Great |
 | **OpenAI** | text-embedding-3-small | $$ | Great |
 
-### Switch Provider
+### Advanced Configuration
+
+For detailed configuration management, use the config CLI:
 
 ```bash
-npx th0th-config init                          # Ollama (default)
-npx th0th-config init --mistral your-api-key   # Mistral
-npx th0th-config init --openai your-api-key    # OpenAI
-npx th0th-config show                          # Show current config
+# Initialize with specific provider
+npx @th0th-ai/mcp-client --config-init                          # Ollama (default)
+npx @th0th-ai/mcp-client --config-init --mistral your-api-key   # Mistral
+npx @th0th-ai/mcp-client --config-init --openai your-api-key    # OpenAI
+
+# Switch provider
+npx @th0th-ai/mcp-client --config-init --mistral your-api-key
+npx @th0th-ai/mcp-client --config-init --ollama-model bge-m3
+
+# Set specific configuration values
+npx @th0th-ai/mcp-client --config-set embedding.dimensions 1024
 ```
 
 ---

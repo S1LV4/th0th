@@ -16,7 +16,7 @@ import {
   GraphQueryOptions,
   ContradictionPair,
   logger,
-} from "@th0th/shared";
+} from "@th0th-ai/shared";
 import { GraphStore } from "./graph-store.js";
 import { RelationExtractor } from "./relation-extractor.js";
 import { GraphQueries } from "./graph-queries.js";

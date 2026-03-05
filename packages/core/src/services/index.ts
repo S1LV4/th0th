@@ -1,5 +1,5 @@
 /**
- * @th0th/core - Services Export
+ * @th0th-ai/core - Services Export
  */
 
 // Search

@@ -2,6 +2,7 @@
   "name": "th0th",
   "version": "1.0.2",
   "private": true,
+  "author": "S1LV4",
   "description": "th0th - Ancient knowledge keeper for modern code. Semantic search with 98% token reduction",
   "workspaces": [
     "packages/*",
@@ -10,14 +11,14 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "dev:api": "bun run --filter @th0th/tools-api dev",
-    "dev:mcp": "bun run --filter @th0th/mcp-client dev",
-    "start:api": "bun run --filter @th0th/tools-api start",
-    "start:mcp": "bun run --filter @th0th/mcp-client start",
+    "dev:api": "bun run --filter @th0th-ai/tools-api dev",
+    "dev:mcp": "bun run --filter @th0th-ai/mcp-client dev",
+    "start:api": "bun run --filter @th0th-ai/tools-api start",
+    "start:mcp": "bun run --filter @th0th-ai/mcp-client start",
     "type-check": "turbo run type-check",
     "test": "turbo run test",
-    "bench:fixture:sicad": "bun run --filter @th0th/core bench:fixture:sicad",
-    "bench:beir": "bun run --filter @th0th/core bench:beir",
+    "bench:fixture:sicad": "bun run --filter @th0th-ai/core bench:fixture:sicad",
+    "bench:beir": "bun run --filter @th0th-ai/core bench:beir",
     "lint": "turbo run lint",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist",
     "version:sync": "bun scripts/version-sync.ts"
@@ -36,7 +37,6 @@
     "vector-search",
     "knowledge-retrieval"
   ],
-  "author": "",
   "license": "MIT",
   "devDependencies": {
     "turbo": "^2.5.0",

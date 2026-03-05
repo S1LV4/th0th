@@ -5,10 +5,10 @@
  * Uses the same caching, auto-reindex, and filter capabilities.
  */
 
-import { IToolHandler } from "@th0th/shared";
-import { ToolResponse } from "@th0th/shared";
+import { IToolHandler } from "@th0th-ai/shared";
+import { ToolResponse } from "@th0th-ai/shared";
 import { SearchProjectTool } from "./search_project.js";
-import { logger } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
 
 interface SearchCodeParams {
   query: string;

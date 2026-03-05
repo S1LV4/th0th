@@ -9,7 +9,7 @@
  * - Query patterns by project
  */
 
-import { logger } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
 import { Database } from "bun:sqlite";
 import path from "path";
 import os from "os";

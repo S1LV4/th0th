@@ -9,7 +9,7 @@ import {
   MemoryType, 
   MemoryLevel, 
   MemoryMetadata 
-} from '@th0th/shared';
+} from '@th0th-ai/shared';
 
 export class Memory implements IMemory {
   id: string;

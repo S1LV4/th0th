@@ -16,7 +16,7 @@ import {
   ContradictionPair,
   config,
   logger,
-} from "@th0th/shared";
+} from "@th0th-ai/shared";
 import { GraphStore } from "./graph-store.js";
 import type { MemoryRow, RelatedMemory } from "./types.js";
 
