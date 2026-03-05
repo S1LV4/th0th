@@ -83,10 +83,14 @@ export class GraphStore {
         UNIQUE(source_id, target_id, relation_type)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_edges_source ON memory_edges(source_id);
+      -- Note: idx_edges_source is redundant with UNIQUE(source_id, ...) and removed
+      -- The UNIQUE constraint already provides efficient source_id lookups
       CREATE INDEX IF NOT EXISTS idx_edges_target ON memory_edges(target_id);
       CREATE INDEX IF NOT EXISTS idx_edges_type ON memory_edges(relation_type);
       CREATE INDEX IF NOT EXISTS idx_edges_weight ON memory_edges(weight DESC);
+      
+      -- Migration: Drop redundant index if it exists
+      DROP INDEX IF EXISTS idx_edges_source;
     `);
   }
 
@@ -215,13 +219,15 @@ export class GraphStore {
 
   /**
    * Get all edges connected to a memory (both directions).
+   * 
+   * Optimized to use UNION ALL instead of OR for better index utilization.
+   * Queries source_id and target_id separately, then combines and sorts.
    */
   getAllEdges(memoryId: string, filter?: EdgeFilter): MemoryEdge[] {
-    const conditions: string[] = [
-      "(source_id = ? OR target_id = ?)",
-    ];
-    const params: any[] = [memoryId, memoryId];
+    const conditions: string[] = [];
+    const params: any[] = [];
 
+    // Build filter conditions (excluding source/target as they're handled by UNION)
     if (filter?.relationTypes && filter.relationTypes.length > 0) {
       const placeholders = filter.relationTypes.map(() => "?").join(",");
       conditions.push(`relation_type IN (${placeholders})`);
@@ -233,21 +239,49 @@ export class GraphStore {
       params.push(filter.minWeight);
     }
 
+    const whereClause = conditions.length > 0 ? `AND ${conditions.join(" AND ")}` : "";
     const limit = filter?.limit ?? 50;
-    params.push(limit);
 
-    const rows = this.db
-      .prepare(
-        `
-      SELECT * FROM memory_edges
-      WHERE ${conditions.join(" AND ")}
+    // Use UNION ALL for better index utilization
+    // Each query uses its respective index (UNIQUE for source_id, idx_edges_target for target_id)
+    const query = `
+      SELECT * FROM (
+        SELECT * FROM memory_edges
+        WHERE source_id = ? ${whereClause}
+        
+        UNION ALL
+        
+        SELECT * FROM memory_edges
+        WHERE target_id = ? ${whereClause}
+      )
       ORDER BY weight DESC, created_at DESC
       LIMIT ?
-    `,
-      )
-      .all(...params) as EdgeRow[];
+    `;
 
-    return rows.map(this.rowToEdge);
+    // Build final params: memoryId + filter params for source query, 
+    // then memoryId + filter params again for target query, then limit
+    const finalParams = [
+      memoryId,
+      ...params,
+      memoryId,
+      ...params,
+      limit
+    ];
+
+    const rows = this.db.prepare(query).all(...finalParams) as EdgeRow[];
+
+    // Deduplicate edges that appear in both directions (though rare with current schema)
+    const seen = new Set<string>();
+    const uniqueRows: EdgeRow[] = [];
+    
+    for (const row of rows) {
+      if (!seen.has(row.id)) {
+        seen.add(row.id);
+        uniqueRows.push(row);
+      }
+    }
+
+    return uniqueRows.map(this.rowToEdge);
   }
 
   /**
