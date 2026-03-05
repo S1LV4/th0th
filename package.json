@@ -13,6 +13,7 @@
     "dev": "turbo run dev",
     "dev:api": "bun run --filter @th0th-ai/tools-api dev",
     "dev:mcp": "bun run --filter @th0th-ai/mcp-client dev",
+    "dev:ui": "bun run --filter @th0th-ai/ui-client dev",
     "start:api": "bun run --filter @th0th-ai/tools-api start",
     "start:mcp": "bun run --filter @th0th-ai/mcp-client start",
     "type-check": "turbo run type-check",

@@ -23,6 +23,11 @@ export interface ProjectSearchInput {
   include?: string[];
   exclude?: string[];
   explainScores?: boolean;
+  /**
+   * Files to boost in ranking (from Symbol Graph prefilter).
+   * Results whose filePath is in this list get score * 1.3.
+   */
+  boostFiles?: string[];
 }
 
 export interface ProjectSearchResult {
@@ -90,6 +95,7 @@ export class SearchController {
       include,
       exclude,
       explainScores = false,
+      boostFiles,
     } = input;
 
     const startTime = Date.now();
@@ -133,8 +139,14 @@ export class SearchController {
       });
     }
 
+    // Apply centrality/graph boost: files identified by Symbol Graph prefilter
+    // get a 30% score multiplier, then re-sort
+    const boostedResults = boostFiles && boostFiles.length > 0
+      ? this.applyBoost(filteredResults, boostFiles)
+      : filteredResults;
+
     // Format results
-    const formattedResults = filteredResults.map((r) => {
+    const formattedResults = boostedResults.map((r) => {
       const base: FormattedResult = {
         id: r.id,
         score: r.score,
@@ -259,5 +271,24 @@ export class SearchController {
 
       return true;
     });
+  }
+
+  /**
+   * Apply a 30% score boost to results whose filePath is in boostFiles.
+   * Re-sorts by boosted score descending.
+   */
+  applyBoost(results: any[], boostFiles: string[]): any[] {
+    const boostSet = new Set(boostFiles);
+    const BOOST_FACTOR = 1.3;
+
+    return results
+      .map((r) => {
+        const filePath = r.metadata?.filePath || r.filePath || "";
+        const boosted = boostSet.has(filePath)
+          ? { ...r, score: Math.min(1, r.score * BOOST_FACTOR) }
+          : r;
+        return boosted;
+      })
+      .sort((a, b) => b.score - a.score);
   }
 }

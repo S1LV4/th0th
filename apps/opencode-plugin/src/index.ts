@@ -85,6 +85,19 @@ async function th0thGet<T = unknown>(
   }
 }
 
+async function th0thGetWithQuery<T = unknown>(
+  endpoint: string,
+  params: Record<string, string | number | boolean | undefined>,
+  timeoutMs = FETCH_TIMEOUT_MS,
+): Promise<T> {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null) qs.set(k, String(v))
+  }
+  const sep = endpoint.includes("?") ? "&" : "?"
+  return th0thGet<T>(`${endpoint}${sep}${qs.toString()}`, timeoutMs)
+}
+
 // ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
@@ -324,6 +337,120 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
             type: args.type ?? "summary",
             projectId,
             limit: args.limit ?? 10,
+          })
+          return JSON.stringify(result)
+        },
+      }),
+
+      // ── Symbol Graph tools ────────────────────────────────────────────────
+
+      "th0th_list_projects": tool({
+        description:
+          "List all indexed projects with their status (pending/indexing/indexed/error), file counts, symbol counts, and last indexed time.",
+        args: {
+          status: tool.schema
+            .enum(["pending", "indexing", "indexed", "error", "all"])
+            .optional()
+            .default("all")
+            .describe("Filter by workspace status. Defaults to 'all'."),
+        },
+        async execute(args) {
+          const result = await th0thGetWithQuery("/api/v1/workspace/list", {
+            status: args.status ?? "all",
+          })
+          return JSON.stringify(result)
+        },
+      }),
+
+      "th0th_search_definitions": tool({
+        description:
+          "Search for symbol definitions (functions, classes, variables, types, interfaces) in an indexed project. Returns name, kind, file location, and doc comments.",
+        args: {
+          query: tool.schema
+            .string()
+            .optional()
+            .describe("Substring search on symbol name (case-insensitive)"),
+          kind: tool.schema
+            .array(tool.schema.enum(["function", "class", "variable", "type", "interface", "export"]))
+            .optional()
+            .describe("Filter by symbol kind"),
+          file: tool.schema
+            .string()
+            .optional()
+            .describe("Filter by file path (relative to project root)"),
+          exportedOnly: tool.schema
+            .boolean()
+            .optional()
+            .default(false)
+            .describe("Return only exported symbols"),
+          maxResults: tool.schema
+            .number()
+            .optional()
+            .default(20)
+            .describe("Maximum number of results to return (default: 20)"),
+        },
+        async execute(args, ctx: ToolContext) {
+          const result = await th0thGetWithQuery("/api/v1/symbol/definitions", {
+            projectId: ctx.worktree ? projectId : projectId,
+            search: args.query,
+            kind: args.kind?.join(","),
+            file: args.file,
+            exportedOnly: args.exportedOnly ?? false,
+            limit: args.maxResults ?? 20,
+          })
+          return JSON.stringify(result)
+        },
+      }),
+
+      "th0th_get_references": tool({
+        description:
+          "Find all references (usages) of a symbol in the project. Returns file paths, line numbers, reference kinds (call/import/type_ref/extend/implement), and code context.",
+        args: {
+          symbolName: tool.schema
+            .string()
+            .describe("Name of the symbol to find references for"),
+          fqn: tool.schema
+            .string()
+            .optional()
+            .describe(
+              "Fully-qualified name (e.g. 'services/search/rlm.ts#ContextualSearchRLM') to disambiguate when multiple definitions share the same name",
+            ),
+          maxResults: tool.schema
+            .number()
+            .optional()
+            .default(50)
+            .describe("Maximum references to return (default: 50)"),
+        },
+        async execute(args) {
+          const result = await th0thGetWithQuery("/api/v1/symbol/references", {
+            projectId,
+            symbolName: args.symbolName,
+            fqn: args.fqn,
+            limit: args.maxResults ?? 50,
+          })
+          return JSON.stringify(result)
+        },
+      }),
+
+      "th0th_go_to_definition": tool({
+        description:
+          "Find the definition of a symbol (function, class, variable, type, etc.) in the project. Disambiguates by calling file context. Returns file location, line numbers, doc comment, and code snippet.",
+        args: {
+          symbolName: tool.schema
+            .string()
+            .describe("Name of the symbol to find the definition for"),
+          fromFile: tool.schema
+            .string()
+            .optional()
+            .describe(
+              "Relative path of the file where the symbol is used. Helps prioritize the correct definition when multiple exist.",
+            ),
+        },
+        async execute(args) {
+          const result = await th0thGetWithQuery("/api/v1/symbol/definition", {
+            projectId,
+            symbolName: args.symbolName,
+            fromFile: args.fromFile,
           })
           return JSON.stringify(result)
         },

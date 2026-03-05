@@ -32,6 +32,7 @@ import { config } from "@th0th-ai/shared";
 import { IndexManager } from "./index-manager.js";
 import { SearchCache } from "./search-cache.js";
 import { SearchAnalytics } from "./search-analytics.js";
+import { symbolRepository } from "../../data/sqlite/symbol-repository.js";
 import fs from "fs/promises";
 import path from "path";
 import { glob } from "glob";
@@ -186,6 +187,10 @@ export class ContextualSearchRLM {
 
       options.onProgress?.(0, filteredFiles.length);
 
+      // Load centrality map once for the whole project so each chunk
+      // carries its file's PageRank score in metadata.
+      const centralityMap = symbolRepository.getCentrality(projectId);
+
       let filesIndexed = 0;
       let chunksIndexed = 0;
       let errors = 0;
@@ -199,7 +204,7 @@ export class ContextualSearchRLM {
         await Promise.all(
           batch.map(async (file) => {
             try {
-              const result = await this.indexFile(file, projectId, projectPath);
+              const result = await this.indexFile(file, projectId, projectPath, centralityMap);
               filesIndexed++;
               chunksIndexed += result.chunks;
             } catch (error) {
@@ -357,6 +362,9 @@ export class ContextualSearchRLM {
       fileCount: filesToReindex.length,
     });
 
+    // Load centrality map so chunks carry PageRank scores
+    const centralityMap = symbolRepository.getCentrality(projectId);
+
     let filesIndexed = 0;
     let chunksIndexed = 0;
     let errors = 0;
@@ -364,7 +372,7 @@ export class ContextualSearchRLM {
     for (const relativeFilePath of filesToReindex) {
       try {
         const fullPath = path.join(projectPath, relativeFilePath);
-        const result = await this.indexFile(fullPath, projectId, projectPath);
+        const result = await this.indexFile(fullPath, projectId, projectPath, centralityMap);
         filesIndexed++;
         chunksIndexed += result.chunks;
       } catch (error) {
@@ -412,6 +420,7 @@ export class ContextualSearchRLM {
     filePath: string,
     projectId: string,
     projectRoot: string,
+    centralityMap?: Map<string, number>,
   ): Promise<{ chunks: number }> {
     const content = await fs.readFile(filePath, "utf-8");
     const relativePath = path.relative(projectRoot, filePath);
@@ -429,6 +438,9 @@ export class ContextualSearchRLM {
     // Smart chunking: language/format-aware splitting
     const chunks = smartChunk(content, relativePath);
 
+    // Look up the file's PageRank centrality score (0 if unavailable)
+    const centralityScore = centralityMap?.get(relativePath) ?? 0;
+
     const documents: VectorDocument[] = chunks.map((chunk, i) => ({
       id: `${projectId}:${relativePath}:${i}`,
       content: chunk.content,
@@ -442,6 +454,7 @@ export class ContextualSearchRLM {
         lineStart: chunk.lineStart,
         lineEnd: chunk.lineEnd,
         label: chunk.label,
+        centralityScore,
       },
     }));
 
@@ -712,8 +725,14 @@ export class ContextualSearchRLM {
     }
 
     // Converte para array e ordena por RRF score
-    return Array.from(scoreMap.values())
-      .sort((a, b) => b.rrfScore - a.rrfScore)
+    const sorted = Array.from(scoreMap.values())
+      .sort((a, b) => b.rrfScore - a.rrfScore);
+
+    // Dynamic normalization: use the top RRF score as divisor so results
+    // span the full [0, 1] range instead of being capped by a fixed constant.
+    const maxRrfScore = sorted[0]?.rrfScore || 1;
+
+    return sorted
       .map(
         (
           {
@@ -726,7 +745,16 @@ export class ContextualSearchRLM {
           },
           index,
         ) => {
-          const normalizedScore = Math.min(1, rrfScore / 0.05);
+          const rrfNormalized = rrfScore / maxRrfScore;
+
+          // Centrality boost: symbols with higher PageRank get a mild re-ranking bonus.
+          // finalScore = RRF_score * (1 + 0.2 * centralityScore)
+          // centralityScore is in [0, 1]; clamped to [0, 1] after boost.
+          const centralityScore =
+            typeof (result.metadata as Record<string, unknown>)?.centralityScore === "number"
+              ? ((result.metadata as Record<string, unknown>).centralityScore as number)
+              : 0;
+          const normalizedScore = Math.min(1, rrfNormalized * (1 + 0.2 * centralityScore));
 
           // Generate explanation if requested
           const explanation = explainScores

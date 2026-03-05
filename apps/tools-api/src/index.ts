@@ -20,6 +20,8 @@ import { projectRoutes } from "./routes/project.js";
 import { contextRoutes } from "./routes/context.js";
 import { analyticsRoutes } from "./routes/analytics.js";
 import { systemRoutes } from "./routes/system.js";
+import { eventsRoutes } from "./routes/events.js";
+import { workspaceRoutes } from "./routes/workspace.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error.js";
 import { getHealthChecker } from "@th0th-ai/core";
@@ -47,6 +49,9 @@ const app = new Elysia({ adapter: node() })
           },
           { name: "analytics", description: "Métricas e analytics" },
           { name: "system", description: "Sistema, health checks e métricas" },
+          { name: "workspace", description: "Gestão de workspaces e Symbol Graph" },
+          { name: "symbol", description: "Navegação de código: definições, referências" },
+          { name: "events", description: "SSE para progresso de indexação em tempo real" },
         ],
       },
     }),
@@ -59,6 +64,8 @@ const app = new Elysia({ adapter: node() })
   .use(contextRoutes)
   .use(analyticsRoutes)
   .use(systemRoutes)
+  .use(eventsRoutes)
+  .use(workspaceRoutes)
   .get("/health", () => ({
     status: "ok",
     service: "th0th-tools-api",

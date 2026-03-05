@@ -330,7 +330,127 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           default: 10,
         },
       },
-      required: ["type"],
+        required: ["type"],
+    },
+  },
+
+  // ── Symbol Graph tools ──────────────────────────────────────────────────
+
+  {
+    name: "th0th_list_projects",
+    description:
+      "List all indexed projects with their status (pending/indexing/indexed/error), file counts, symbol counts, and last indexed time.",
+    apiEndpoint: "/api/v1/workspace/list",
+    apiMethod: "GET",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["pending", "indexing", "indexed", "error", "all"],
+          description: "Filter by workspace status. Defaults to 'all'.",
+          default: "all",
+        },
+      },
+    },
+  },
+
+  {
+    name: "th0th_search_definitions",
+    description:
+      "Search for symbol definitions (functions, classes, variables, types, interfaces) in an indexed project. Returns name, kind, file location, line numbers, and doc comments.",
+    apiEndpoint: "/api/v1/symbol/definitions",
+    apiMethod: "GET",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: {
+          type: "string",
+          description: "The project ID to search in",
+        },
+        query: {
+          type: "string",
+          description: "Substring search on symbol name (case-insensitive)",
+        },
+        kind: {
+          type: "string",
+          description: "Comma-separated symbol kinds to filter: function,class,variable,type,interface,export",
+        },
+        file: {
+          type: "string",
+          description: "Filter by file path (relative to project root)",
+        },
+        exportedOnly: {
+          type: "boolean",
+          description: "Return only exported symbols",
+          default: false,
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results (default: 20)",
+          default: 20,
+        },
+      },
+      required: ["projectId"],
+    },
+  },
+
+  {
+    name: "th0th_get_references",
+    description:
+      "Find all references (usages) of a symbol across the project. Returns file paths, line numbers, reference kinds (call/import/type_ref/extend/implement), and code context snippets.",
+    apiEndpoint: "/api/v1/symbol/references",
+    apiMethod: "GET",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: {
+          type: "string",
+          description: "The project ID to search in",
+        },
+        symbolName: {
+          type: "string",
+          description: "Name of the symbol to find references for",
+        },
+        fqn: {
+          type: "string",
+          description:
+            "Fully-qualified name (e.g. 'services/search/rlm.ts#ContextualSearchRLM') to disambiguate when multiple definitions share the same name",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum references to return (default: 50)",
+          default: 50,
+        },
+      },
+      required: ["projectId", "symbolName"],
+    },
+  },
+
+  {
+    name: "th0th_go_to_definition",
+    description:
+      "Find the definition of a symbol (function, class, variable, type, etc.) in the project. Disambiguates by calling file context. Returns file location, line numbers, doc comment, and code snippet.",
+    apiEndpoint: "/api/v1/symbol/definition",
+    apiMethod: "GET",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: {
+          type: "string",
+          description: "The project ID to search in",
+        },
+        symbolName: {
+          type: "string",
+          description: "Name of the symbol to find the definition for",
+        },
+        fromFile: {
+          type: "string",
+          description:
+            "Relative path of the file where the symbol is used. Helps prioritize the correct definition when multiple exist.",
+        },
+      },
+      required: ["projectId", "symbolName"],
     },
   },
 ];

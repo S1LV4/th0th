@@ -140,16 +140,22 @@ class McpProxyServer {
         // Proxy to API
         let response;
         if (toolDef.apiMethod === "GET") {
-          // For GET requests, construct URL with path parameters
+          // For GET requests: replace :pathParam placeholders, rest go as query params
           let endpoint = toolDef.apiEndpoint;
-          const params = args as Record<string, any>;
-          
-          // Replace :param with actual values
-          Object.keys(params).forEach((key) => {
-            endpoint = endpoint.replace(`:${key}`, encodeURIComponent(params[key]));
-          });
-          
-          response = await this.apiClient.get(endpoint);
+          const params = (args ?? {}) as Record<string, unknown>;
+          const queryParams: Record<string, unknown> = {};
+
+          for (const [key, value] of Object.entries(params)) {
+            if (endpoint.includes(`:${key}`)) {
+              // Path parameter
+              endpoint = endpoint.replace(`:${key}`, encodeURIComponent(String(value)));
+            } else {
+              // Query parameter
+              queryParams[key] = value;
+            }
+          }
+
+          response = await this.apiClient.get(endpoint, queryParams);
         } else {
           // POST request with body
           response = await this.apiClient.post(toolDef.apiEndpoint, args);
