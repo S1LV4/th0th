@@ -304,6 +304,150 @@ describe("CheckpointManager", () => {
       expect(stats.oldestCheckpointAge).toBeDefined();
     });
   });
+
+  // ── Lazy Deserialization ──────────────────────────────────
+  describe("Lazy Deserialization", () => {
+    test("listCheckpointsMetadata returns metadata without state", () => {
+      const state1 = makeTaskState({ taskId: "task_A" });
+      const state2 = makeTaskState({ taskId: "task_B" });
+
+      const ckpt1 = manager.createCheckpoint(state1, {
+        agentId: "agent1",
+        projectId: "proj1",
+        checkpointType: CheckpointType.AUTO,
+        memoryIds: ["mem1", "mem2"],
+        fileChanges: ["/src/a.ts"],
+      });
+
+      const ckpt2 = manager.createCheckpoint(state2, {
+        agentId: "agent2",
+        checkpointType: CheckpointType.MILESTONE,
+      });
+
+      const metadata = manager.listCheckpointsMetadata();
+
+      expect(metadata.length).toBe(2);
+      
+      // First checkpoint metadata
+      const meta1 = metadata.find(m => m.id === ckpt1.id);
+      expect(meta1).toBeDefined();
+      expect(meta1!.taskId).toBe("task_A");
+      expect(meta1!.agentId).toBe("agent1");
+      expect(meta1!.projectId).toBe("proj1");
+      expect(meta1!.checkpointType).toBe(CheckpointType.AUTO);
+      expect(meta1!.compressedSizeBytes).toBeGreaterThan(0);
+      expect(meta1!.memoryCount).toBe(2);
+      expect(meta1!.fileChangeCount).toBe(1);
+      expect(meta1!.createdAt).toBeGreaterThan(0);
+      
+      // Verify state is NOT included
+      expect((meta1 as any).state).toBeUndefined();
+    });
+
+    test("listCheckpointsMetadata supports same filters as listCheckpoints", () => {
+      const state1 = makeTaskState({ taskId: "task_A" });
+      const state2 = makeTaskState({ taskId: "task_B" });
+
+      manager.createCheckpoint(state1, {
+        checkpointType: CheckpointType.AUTO,
+      });
+      manager.createCheckpoint(state2, {
+        checkpointType: CheckpointType.MILESTONE,
+      });
+      manager.createCheckpoint(state1, {
+        checkpointType: CheckpointType.MANUAL,
+      });
+
+      // Filter by taskId
+      const taskA = manager.listCheckpointsMetadata({ taskId: "task_A" });
+      expect(taskA.length).toBe(2);
+
+      // Filter by type
+      const milestones = manager.listCheckpointsMetadata({
+        checkpointType: CheckpointType.MILESTONE,
+      });
+      expect(milestones.length).toBe(1);
+      expect(milestones[0].taskId).toBe("task_B");
+    });
+
+    test("getCheckpointState deserializes state on demand", () => {
+      const state = makeTaskState({ description: "Test lazy loading" });
+      const ckpt = manager.createCheckpoint(state);
+
+      // Get state separately
+      const deserializedState = manager.getCheckpointState(ckpt.id);
+
+      expect(deserializedState).not.toBeNull();
+      expect(deserializedState!.taskId).toBe("task_test_1");
+      expect(deserializedState!.description).toBe("Test lazy loading");
+      expect(deserializedState!.status).toBe(TaskStatus.IN_PROGRESS);
+    });
+
+    test("getCheckpointState returns null for non-existent checkpoint", () => {
+      expect(manager.getCheckpointState("nonexistent")).toBeNull();
+    });
+
+    test("lazy deserialization performance: list then load selected", () => {
+      // Create 20 checkpoints with large state
+      const checkpoints: any[] = [];
+      for (let i = 0; i < 20; i++) {
+        const state = makeTaskState({
+          taskId: `task_${i}`,
+          description: "A".repeat(5000), // Large state
+        });
+        checkpoints.push(manager.createCheckpoint(state));
+      }
+
+      // Measure metadata-only listing (should be fast)
+      const metadataStart = performance.now();
+      const metadata = manager.listCheckpointsMetadata({ limit: 20 });
+      const metadataTime = performance.now() - metadataStart;
+
+      expect(metadata.length).toBe(20);
+
+      // Measure full deserialization (should be slower)
+      const fullStart = performance.now();
+      const full = manager.listCheckpoints({ limit: 20 });
+      const fullTime = performance.now() - fullStart;
+
+      expect(full.length).toBe(20);
+
+      // Metadata-only should be significantly faster (at least 2x)
+      // With 20 large states, we expect 5-10x speedup
+      console.log(`\n📊 Lazy Deserialization Performance:`);
+      console.log(`   Metadata-only: ${metadataTime.toFixed(2)}ms`);
+      console.log(`   Full deserialization: ${fullTime.toFixed(2)}ms`);
+      console.log(`   Speedup: ${(fullTime / metadataTime).toFixed(1)}x`);
+
+      expect(metadataTime).toBeLessThan(fullTime);
+    });
+
+    test("workflow: list metadata, then deserialize selected checkpoint", () => {
+      // Create multiple checkpoints
+      for (let i = 0; i < 5; i++) {
+        manager.createCheckpoint(makeTaskState({ taskId: `task_${i}` }), {
+          checkpointType: i % 2 === 0 ? CheckpointType.AUTO : CheckpointType.MILESTONE,
+        });
+      }
+
+      // Step 1: List metadata (fast, no deserialization)
+      const metadata = manager.listCheckpointsMetadata();
+      expect(metadata.length).toBe(5);
+
+      // Step 2: User selects a checkpoint (e.g., latest milestone)
+      const selectedMetadata = metadata.find(
+        m => m.checkpointType === CheckpointType.MILESTONE
+      );
+      expect(selectedMetadata).toBeDefined();
+
+      // Step 3: Deserialize only the selected checkpoint
+      const state = manager.getCheckpointState(selectedMetadata!.id);
+      expect(state).not.toBeNull();
+      expect(state!.taskId).toMatch(/^task_/);
+      
+      // This workflow avoids deserializing 4 unnecessary checkpoints
+    });
+  });
 });
 
 // ── AutoCheckpointer tests ───────────────────────────────────
