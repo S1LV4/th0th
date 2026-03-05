@@ -16,6 +16,7 @@
 
 import { createHash } from "crypto";
 import { logger, estimateTokens } from "@th0th-ai/shared";
+import { TokenMetrics } from "../metrics/token-metrics.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -179,6 +180,10 @@ export class SessionFileCache {
         estimateTokens(content, "code") - REFERENCE_TOKEN_COST,
       );
       this.stats.totalTokensSaved += saved;
+      
+      // Record in global TokenMetrics
+      TokenMetrics.getInstance().recordSessionCacheSavings(saved);
+      
       logger.debug("Session file cache: unchanged chunk", {
         sessionId,
         key,
@@ -199,6 +204,9 @@ export class SessionFileCache {
     const fullTokens = estimateTokens(content, "code");
     const saved = Math.max(0, fullTokens - diffTokens);
     this.stats.totalTokensSaved += saved;
+
+    // Record in global TokenMetrics
+    TokenMetrics.getInstance().recordSessionCacheSavings(saved);
 
     logger.debug("Session file cache: changed chunk", {
       sessionId,
