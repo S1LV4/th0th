@@ -12,13 +12,14 @@
 #
 # MCP via Docker (Claude Desktop / OpenCode):
 #   docker compose run --rm -i mcp
+#
+# Build locally instead of pulling from DockerHub:
+#   docker compose up -d --build
 # ============================================
 
 services:
   api:
-    build:
-      context: .
-      target: api
+    image: ${TH0TH_API_IMAGE:-s1lv4/th0th-ai:api-latest}
     container_name: th0th-api
     restart: unless-stopped
     ports:
@@ -29,8 +30,8 @@ services:
       - NODE_ENV=production
       - TH0TH_API_PORT=3333
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text:latest}
-      - OLLAMA_EMBEDDING_DIMENSIONS=${OLLAMA_EMBEDDING_DIMENSIONS:-768}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      - OLLAMA_EMBEDDING_DIMENSIONS=${OLLAMA_EMBEDDING_DIMENSIONS:-4096}
       - RLM_LLM_ENABLED=${RLM_LLM_ENABLED:-false}
       - RLM_LLM_API_KEY=${RLM_LLM_API_KEY:-}
       - RLM_LLM_MODEL=${RLM_LLM_MODEL:-}
@@ -45,9 +46,7 @@ services:
       retries: 3
 
   mcp:
-    build:
-      context: .
-      target: mcp
+    image: ${TH0TH_MCP_IMAGE:-s1lv4/th0th-ai:mcp-latest}
     container_name: th0th-mcp
     stdin_open: true
     environment:
