@@ -1,5 +1,5 @@
 /**
- * @th0th/shared - Tipos, utilitários e configuração compartilhados
+ * @th0th-ai/shared - Tipos, utilitários e configuração compartilhados
  */
 
 // Environment loader

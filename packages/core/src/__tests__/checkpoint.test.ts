@@ -17,7 +17,7 @@ import {
   CheckpointType,
   TaskStatus,
   type TaskState,
-} from "@th0th/shared";
+} from "@th0th-ai/shared";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -25,8 +25,8 @@ import os from "os";
 // ── Mock config and logger ────────────────────────────────────
 let tmpDir: string;
 
-mock.module("@th0th/shared", () => {
-  const actual = require("@th0th/shared");
+mock.module("@th0th-ai/shared", () => {
+  const actual = require("@th0th-ai/shared");
   return {
     ...actual,
     CheckpointType: actual.CheckpointType,
@@ -48,6 +48,7 @@ mock.module("@th0th/shared", () => {
       warn: () => {},
       error: () => {},
       debug: () => {},
+      metric: () => {},
     },
   };
 });
@@ -197,14 +198,16 @@ describe("CheckpointManager", () => {
   });
 
   describe("getLatestCheckpoint", () => {
-    test("returns most recent checkpoint for task", () => {
+    test("returns most recent checkpoint for task", async () => {
       const state = makeTaskState();
 
       manager.createCheckpoint(state, {
         checkpointType: CheckpointType.AUTO,
       });
 
-      // Small delay to ensure different created_at
+      // Small delay to ensure different created_at timestamps
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
       const state2 = makeTaskState({
         progress: { ...state.progress, completed: 5, percentage: 50 },
       });

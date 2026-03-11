@@ -17,7 +17,7 @@ import {
   RestoreResult,
   config,
   logger,
-} from "@th0th/shared";
+} from "@th0th-ai/shared";
 
 // ── Internal row type ────────────────────────────────────────
 

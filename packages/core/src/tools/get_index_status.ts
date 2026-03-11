@@ -4,10 +4,10 @@
  * Queries the status and progress of an async indexing job.
  */
 
-import { IToolHandler } from "@th0th/shared";
-import { ToolResponse } from "@th0th/shared";
+import { IToolHandler } from "@th0th-ai/shared";
+import { ToolResponse } from "@th0th-ai/shared";
 import { indexJobTracker } from "../services/jobs/index-job-tracker.js";
-import { logger } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
 
 interface GetIndexStatusParams {
   jobId: string;

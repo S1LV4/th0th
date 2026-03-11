@@ -8,8 +8,8 @@
 import { describe, test, expect, mock, beforeAll } from "bun:test";
 
 // ── Mock dependencies ────────────────────────────────────────
-mock.module("@th0th/shared", () => {
-  const actual = require("@th0th/shared");
+mock.module("@th0th-ai/shared", () => {
+  const actual = require("@th0th-ai/shared");
   return {
     ...actual,
     config: {
@@ -29,6 +29,7 @@ mock.module("@th0th/shared", () => {
       warn: () => {},
       error: () => {},
       debug: () => {},
+      metric: () => {},
     },
   };
 });

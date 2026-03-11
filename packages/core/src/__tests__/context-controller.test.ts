@@ -13,7 +13,7 @@ import {
   beforeEach,
 } from "bun:test";
 
-// ── Lightweight estimateTokens (matches @th0th/shared signature) ──
+// ── Lightweight estimateTokens (matches @th0th-ai/shared signature) ──
 function estimateTokens(text: string, _mode?: string): number {
   return Math.ceil(text.length / 4);
 }

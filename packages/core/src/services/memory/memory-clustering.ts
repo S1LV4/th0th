@@ -16,7 +16,7 @@
 
 import { Database } from "bun:sqlite";
 import path from "path";
-import { config, logger } from "@th0th/shared";
+import { config, logger } from "@th0th-ai/shared";
 import type { MemoryRowWithEmbedding } from "../graph/types.js";
 
 // ── Public types ─────────────────────────────────────────────

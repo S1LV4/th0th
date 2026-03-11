@@ -7,7 +7,7 @@
  */
 
 import { Elysia, t } from "elysia";
-import { IndexProjectTool, GetIndexStatusTool, sqliteVectorStore } from "@th0th/core";
+import { IndexProjectTool, GetIndexStatusTool, sqliteVectorStore } from "@th0th-ai/core";
 
 const indexProjectTool = new IndexProjectTool();
 const getIndexStatusTool = new GetIndexStatusTool();

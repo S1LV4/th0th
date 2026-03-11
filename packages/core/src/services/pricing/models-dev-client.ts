@@ -10,8 +10,8 @@
  * Returns real-time pricing for 1900+ models from multiple providers
  */
 
-import { logger } from "@th0th/shared";
-import { config } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
+import { config } from "@th0th-ai/shared";
 import fs from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";

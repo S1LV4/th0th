@@ -8,7 +8,7 @@ import {
   CompressedContent as ICompressedContent,
   CompressionStrategy,
   CompressionMetadata
-} from '@th0th/shared';
+} from '@th0th-ai/shared';
 
 export class CompressedContent implements ICompressedContent {
   original: string;

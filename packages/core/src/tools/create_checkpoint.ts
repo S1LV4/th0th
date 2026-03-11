@@ -5,8 +5,8 @@
  * Thin layer — delegates to CheckpointManager service.
  */
 
-import { IToolHandler, ToolResponse, TaskState, TaskStatus, CheckpointType } from "@th0th/shared";
-import { logger } from "@th0th/shared";
+import { IToolHandler, ToolResponse, TaskState, TaskStatus, CheckpointType } from "@th0th-ai/shared";
+import { logger } from "@th0th-ai/shared";
 import { encode as toTOON } from "@toon-format/toon";
 import { CheckpointManager } from "../services/checkpoint/checkpoint-manager.js";
 

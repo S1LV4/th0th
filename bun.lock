@@ -10,7 +10,7 @@
       },
     },
     "apps/mcp-client": {
-      "name": "@th0th/mcp-client",
+      "name": "@th0th-ai/mcp-client",
       "version": "1.0.2",
       "bin": {
         "th0th": "dist/index.js",
@@ -18,7 +18,7 @@
       },
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.0.0",
-        "@th0th/shared": "workspace:*",
+        "@th0th-ai/shared": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "^22.10.5",
@@ -26,7 +26,7 @@
       },
     },
     "apps/opencode-plugin": {
-      "name": "@th0th/opencode-plugin",
+      "name": "@th0th-ai/opencode-plugin",
       "version": "1.0.2",
       "bin": {
         "th0th-config": "dist/config-cli.js",
@@ -34,8 +34,8 @@
       "dependencies": {
         "@opencode-ai/plugin": "^1.2.15",
         "@opencode-ai/sdk": "^1.2.15",
-        "@th0th/core": "workspace:*",
-        "@th0th/shared": "workspace:*",
+        "@th0th-ai/core": "workspace:*",
+        "@th0th-ai/shared": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "^22.10.5",
@@ -43,7 +43,7 @@
       },
     },
     "apps/tools-api": {
-      "name": "@th0th/tools-api",
+      "name": "@th0th-ai/tools-api",
       "version": "1.0.2",
       "bin": {
         "th0th-api": "dist/index.js",
@@ -52,8 +52,8 @@
         "@elysiajs/cors": "^1.2.0",
         "@elysiajs/node": "^1.2.0",
         "@elysiajs/swagger": "^1.2.0",
-        "@th0th/core": "workspace:*",
-        "@th0th/shared": "workspace:*",
+        "@th0th-ai/core": "workspace:*",
+        "@th0th-ai/shared": "workspace:*",
         "elysia": "^1.2.25",
       },
       "devDependencies": {
@@ -62,7 +62,7 @@
       },
     },
     "packages/core": {
-      "name": "@th0th/core",
+      "name": "@th0th-ai/core",
       "version": "1.0.2",
       "dependencies": {
         "@ai-sdk/cohere": "^3.0.17",
@@ -71,7 +71,7 @@
         "@ai-sdk/openai": "^3.0.24",
         "@prisma/client": "^7.3.0",
         "@prisma/client-runtime-utils": "^7.3.0",
-        "@th0th/shared": "workspace:*",
+        "@th0th-ai/shared": "workspace:*",
         "@toon-format/toon": "^2.1.0",
         "ai": "^6.0.66",
         "glob": "^10.0.0",
@@ -90,7 +90,7 @@
       },
     },
     "packages/shared": {
-      "name": "@th0th/shared",
+      "name": "@th0th-ai/shared",
       "version": "1.0.2",
       "dependencies": {
         "dotenv": "^17.2.3",
@@ -145,9 +145,9 @@
 
     "@mrleebo/prisma-ast": ["@mrleebo/prisma-ast@0.13.1", "", { "dependencies": { "chevrotain": "^10.5.0", "lilconfig": "^2.1.0" } }, "sha512-XyroGQXcHrZdvmrGJvsA9KNeOOgGMg1Vg9OlheUsBOSKznLMDl+YChxbkboRHvtFYJEMRYmlV3uoo/njCw05iw=="],
 
-    "@opencode-ai/plugin": ["@opencode-ai/plugin@1.2.15", "", { "dependencies": { "@opencode-ai/sdk": "1.2.15", "zod": "4.1.8" } }, "sha512-mh9S05W+CZZmo6q3uIEBubS66QVgiev7fRafX7vemrCfz+3pEIkSwipLjU/sxIewC9yLiDWLqS73DH/iEQzVDw=="],
+    "@opencode-ai/plugin": ["@opencode-ai/plugin@1.2.16", "", { "dependencies": { "@opencode-ai/sdk": "1.2.16", "zod": "4.1.8" } }, "sha512-9Kb7BQIC2P3oKCvI8K3thP5YP0vE7yLvcmBmgyACUIqc3e5UL6U+4umLpTvgQa2eQdjxtOXznuGTNwgcGMHUHg=="],
 
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.2.15", "", {}, "sha512-NUJNlyBCdZ4R0EBLjJziEQOp2XbRPJosaMcTcWSWO5XJPKGUpz0u8ql+5cR8K+v2RJ+hp2NobtNwpjEYfe6BRQ=="],
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.2.17", "", {}, "sha512-HdeLeyJ2/Yl/NBHqw9pGFBnkIXuf0Id1kX1GMXDcnZwbJROUJ6TtrW/wLngTYW478E4CCm1jwknjxxmDuxzVMQ=="],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.9.0", "", {}, "sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg=="],
 
@@ -187,15 +187,15 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@th0th/core": ["@th0th/core@workspace:packages/core"],
+    "@th0th-ai/core": ["@th0th-ai/core@workspace:packages/core"],
 
-    "@th0th/mcp-client": ["@th0th/mcp-client@workspace:apps/mcp-client"],
+    "@th0th-ai/mcp-client": ["@th0th-ai/mcp-client@workspace:apps/mcp-client"],
 
-    "@th0th/opencode-plugin": ["@th0th/opencode-plugin@workspace:apps/opencode-plugin"],
+    "@th0th-ai/opencode-plugin": ["@th0th-ai/opencode-plugin@workspace:apps/opencode-plugin"],
 
-    "@th0th/shared": ["@th0th/shared@workspace:packages/shared"],
+    "@th0th-ai/shared": ["@th0th-ai/shared@workspace:packages/shared"],
 
-    "@th0th/tools-api": ["@th0th/tools-api@workspace:apps/tools-api"],
+    "@th0th-ai/tools-api": ["@th0th-ai/tools-api@workspace:apps/tools-api"],
 
     "@tokenizer/inflate": ["@tokenizer/inflate@0.4.1", "", { "dependencies": { "debug": "^4.4.3", "token-types": "^6.1.1" } }, "sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA=="],
 
@@ -373,7 +373,7 @@
 
     "hasown": ["hasown@2.0.2", "", { "dependencies": { "function-bind": "^1.1.2" } }, "sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ=="],
 
-    "hono": ["hono@4.12.3", "", {}, "sha512-SFsVSjp8sj5UumXOOFlkZOG6XS9SJDKw0TbwFeV+AJ8xlST8kxK5Z/5EYa111UY8732lK2S/xB653ceuaoGwpg=="],
+    "hono": ["hono@4.11.4", "", {}, "sha512-U7tt8JsyrxSRKspfhtLET79pU8K+tInj5QZXs1jSugO1Vq5dFj3kmZsRldo29mTBfcjDRVRXrEZ6LS63Cog9ZA=="],
 
     "hookable": ["hookable@5.5.3", "", {}, "sha512-Yc+BQe8SvoXH1643Qez1zqLRmbA5rCL+sSmk6TVos0LWVfNIB7PGncdlId77WzLGSIB5KaWgTaNTs2lNVEI6VQ=="],
 
@@ -621,9 +621,9 @@
 
     "zod-to-json-schema": ["zod-to-json-schema@3.25.1", "", { "peerDependencies": { "zod": "^3.25 || ^4" } }, "sha512-pM/SU9d3YAggzi6MtR4h7ruuQlqKtad8e9S0fmxcMi+ueAK5Korys/aWcV9LIIHTVbj01NdzxcnXSN+O74ZIVA=="],
 
-    "@opencode-ai/plugin/zod": ["zod@4.1.8", "", {}, "sha512-5R1P+WwQqmmMIEACyzSvo4JXHY5WiAFHRMg+zBZKgKS+Q1viRa0C1hmUKtHltoIFKtIdki3pRxkmpP74jnNYHQ=="],
+    "@opencode-ai/plugin/@opencode-ai/sdk": ["@opencode-ai/sdk@1.2.16", "", {}, "sha512-y9ae9VnCcuog0GaI4DveX1HB6DBoZgGN3EuJVlRFbBCPwhzkls6fCfHSb5+VnTS6Fy0OWFUL28VBCmixL/D+/Q=="],
 
-    "@prisma/dev/hono": ["hono@4.11.4", "", {}, "sha512-U7tt8JsyrxSRKspfhtLET79pU8K+tInj5QZXs1jSugO1Vq5dFj3kmZsRldo29mTBfcjDRVRXrEZ6LS63Cog9ZA=="],
+    "@opencode-ai/plugin/zod": ["zod@4.1.8", "", {}, "sha512-5R1P+WwQqmmMIEACyzSvo4JXHY5WiAFHRMg+zBZKgKS+Q1viRa0C1hmUKtHltoIFKtIdki3pRxkmpP74jnNYHQ=="],
 
     "@prisma/dev/pathe": ["pathe@2.0.3", "", {}, "sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w=="],
 
@@ -635,9 +635,9 @@
 
     "@scalar/themes/@scalar/types": ["@scalar/types@0.1.7", "", { "dependencies": { "@scalar/openapi-types": "0.2.0", "@unhead/schema": "^1.11.11", "nanoid": "^5.1.5", "type-fest": "^4.20.0", "zod": "^3.23.8" } }, "sha512-irIDYzTQG2KLvFbuTI8k2Pz/R4JR+zUUSykVTbEMatkzMmVFnn1VzNSMlODbadycwZunbnL2tA27AXed9URVjw=="],
 
-    "@th0th/mcp-client/@types/node": ["@types/node@22.19.13", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-akNQMv0wW5uyRpD2v2IEyRSZiR+BeGuoB6L310EgGObO44HSMNT8z1xzio28V8qOrgYaopIDNA18YgdXd+qTiw=="],
+    "@th0th-ai/mcp-client/@types/node": ["@types/node@22.19.13", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-akNQMv0wW5uyRpD2v2IEyRSZiR+BeGuoB6L310EgGObO44HSMNT8z1xzio28V8qOrgYaopIDNA18YgdXd+qTiw=="],
 
-    "@th0th/opencode-plugin/@types/node": ["@types/node@22.19.13", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-akNQMv0wW5uyRpD2v2IEyRSZiR+BeGuoB6L310EgGObO44HSMNT8z1xzio28V8qOrgYaopIDNA18YgdXd+qTiw=="],
+    "@th0th-ai/opencode-plugin/@types/node": ["@types/node@22.19.13", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-akNQMv0wW5uyRpD2v2IEyRSZiR+BeGuoB6L310EgGObO44HSMNT8z1xzio28V8qOrgYaopIDNA18YgdXd+qTiw=="],
 
     "c12/dotenv": ["dotenv@16.6.1", "", {}, "sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow=="],
 
@@ -677,9 +677,9 @@
 
     "@scalar/themes/@scalar/types/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
-    "@th0th/mcp-client/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
+    "@th0th-ai/mcp-client/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
 
-    "@th0th/opencode-plugin/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
+    "@th0th-ai/opencode-plugin/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
 
     "ollama-ai-provider/@ai-sdk/provider-utils/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 

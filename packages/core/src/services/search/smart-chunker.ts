@@ -673,6 +673,7 @@ const CODE_EXTENSIONS = new Set([
   ".js",
   ".tsx",
   ".jsx",
+  ".dart",
   ".py",
   ".java",
   ".go",

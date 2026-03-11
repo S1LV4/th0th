@@ -33,7 +33,7 @@ import {
   hasApiKey,
   type EmbeddingProviderConfig,
 } from "./config.js";
-import { logger } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
 
 /**
  * Options for creating an embedding provider

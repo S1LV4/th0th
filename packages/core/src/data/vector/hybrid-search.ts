@@ -1,15 +1,15 @@
 /**
  * Hybrid Search
- * 
+ *
  * Combines vector search (semantic) with keyword search (lexical)
  * using Reciprocal Rank Fusion (RRF) for reranking
  */
 
-import { IHybridSearch } from '@th0th/shared';
-import { SearchResult, RetrievalOptions } from '@th0th/shared';
+import { IHybridSearch } from '@th0th-ai/shared';
+import { SearchResult, RetrievalOptions } from '@th0th-ai/shared';
 import { VectorStore } from '../chromadb/vector-store.js';
 import { KeywordSearch } from '../sqlite/keyword-search.js';
-import { logger } from '@th0th/shared';
+import { logger } from '@th0th-ai/shared';
 
 /**
  * Reciprocal Rank Fusion constant
@@ -39,9 +39,9 @@ export class HybridSearch implements IHybridSearch {
     const minScore = options.minScore || 0;
 
     try {
-      logger.debug('Starting hybrid search', { 
+      logger.debug('Starting hybrid search', {
         query: query.slice(0, 50),
-        maxResults 
+        maxResults
       });
 
       // Execute searches in parallel (2x results to have buffer for fusion)
@@ -78,7 +78,7 @@ export class HybridSearch implements IHybridSearch {
 
   /**
    * Rerank results using Reciprocal Rank Fusion (RRF)
-   * 
+   *
    * RRF formula: score(d) = Σ 1 / (k + rank(d))
    * where k is a constant (typically 60) and rank is the position in each list
    */
@@ -104,13 +104,20 @@ export class HybridSearch implements IHybridSearch {
       });
     }
 
-    // Convert map to array and sort by RRF score
-    const reranked = Array.from(scoreMap.values())
-      .sort((a, b) => b.rrfScore - a.rrfScore)
-      .map(({ result, rrfScore }) => ({
-        ...result,
-        score: this.normalizeRRFScore(rrfScore) // Normalize to 0-1
-      }));
+    // Sort entries by RRF score descending
+    const sorted = Array.from(scoreMap.values()).sort(
+      (a, b) => b.rrfScore - a.rrfScore,
+    );
+
+    // Normalize all scores in a single pass using the observed max
+    const normalizedMap = this.normalizeRRFScores(
+      sorted.map(({ result, rrfScore }) => ({ id: result.id, rrfScore })),
+    );
+
+    const reranked = sorted.map(({ result }) => ({
+      ...result,
+      score: normalizedMap.get(result.id) ?? 0,
+    }));
 
     logger.debug('Results reranked using RRF', {
       uniqueResults: reranked.length,
@@ -121,13 +128,32 @@ export class HybridSearch implements IHybridSearch {
   }
 
   /**
-   * Normalize RRF score to 0-1 range
+   * Normalize RRF scores to 0-1 range using the actual max in the result set.
+   *
+   * The theoretical max per result per list is 1/(k+1). With N lists the
+   * absolute ceiling is N/(k+1). But actual maxima vary, so we use the
+   * observed max to give the best-ranked result a score of 1 and scale
+   * everything else relative to it. Falls back to the theoretical ceiling
+   * when all scores are equal (e.g. single-result sets).
+   */
+  private normalizeRRFScores(values: { id: string; rrfScore: number }[]): Map<string, number> {
+    if (values.length === 0) return new Map();
+
+    const maxRRF = Math.max(...values.map((v) => v.rrfScore));
+    // Theoretical max for k=60 with 2 lists
+    const theoreticalMax = 2 / (RRF_K + 1);
+    const divisor = maxRRF > 0 ? maxRRF : theoreticalMax;
+
+    return new Map(values.map((v) => [v.id, Math.min(1, v.rrfScore / divisor)]));
+  }
+
+  /**
+   * @deprecated Use normalizeRRFScores (batch) instead
    */
   private normalizeRRFScore(rrfScore: number): number {
-    // RRF scores typically range from 0 to ~0.05 (for k=60)
-    // Normalize to 0-1 using sigmoid-like function
-    const maxRRF = 0.05; // Approximate max for k=60
-    return Math.min(1, rrfScore / maxRRF);
+    // Kept for backwards compatibility; single-value path.
+    const theoreticalMax = 2 / (RRF_K + 1);
+    return Math.min(1, rrfScore / theoreticalMax);
   }
 
   /**
@@ -247,10 +273,10 @@ export class HybridSearch implements IHybridSearch {
 
     for (let i = 1; i < results.length; i++) {
       const candidate = results[i];
-      
+
       // Check if candidate is too similar to any already selected result
       const isTooSimilar = diversified.some(selected => {
-        return this.calculateContentSimilarity(selected.content, candidate.content) 
+        return this.calculateContentSimilarity(selected.content, candidate.content)
           > maxSimilarityThreshold;
       });
 

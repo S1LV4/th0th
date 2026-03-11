@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect, beforeEach, mock } from "bun:test";
-import { MemoryType, MemoryLevel } from "@th0th/shared";
+import { MemoryType, MemoryLevel } from "@th0th-ai/shared";
 
 // ── Mock EmbeddingService before importing MemoryService ─────
 mock.module("../data/chromadb/vector-store.js", () => ({

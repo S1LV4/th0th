@@ -5,7 +5,7 @@
  */
 
 import { Elysia, t } from "elysia";
-import { GetAnalyticsTool } from "@th0th/core";
+import { GetAnalyticsTool } from "@th0th-ai/core";
 
 const getAnalyticsTool = new GetAnalyticsTool();
 

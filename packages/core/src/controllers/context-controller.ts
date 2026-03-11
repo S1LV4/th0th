@@ -6,10 +6,14 @@
  * to deliver token-efficient context to agents.
  */
 
-import { logger, estimateTokens } from "@th0th/shared";
+import { logger, estimateTokens } from "@th0th-ai/shared";
 import { SearchController } from "./search-controller.js";
 import { MemoryController } from "./memory-controller.js";
 import { CompressContextTool } from "../tools/compress_context.js";
+import {
+  SessionFileCache,
+  REFERENCE_TOKEN_COST,
+} from "../services/context/session-file-cache.js";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -33,6 +37,10 @@ export interface OptimizedContextResult {
   memoriesCount: number;
   tokensSaved: number;
   compressionRatio: number;
+  /** Number of file chunks skipped (reference token) or diff-only in this call. */
+  sessionCacheHits: number;
+  /** Tokens saved specifically by the session file cache (ref + diff-only). */
+  tokensSavedBySessionCache: number;
 }
 
 // ── Controller ───────────────────────────────────────────────
@@ -43,11 +51,13 @@ export class ContextController {
   private readonly searchCtrl: SearchController;
   private readonly memoryCtrl: MemoryController;
   private readonly compressor: CompressContextTool;
+  private readonly sessionCache: SessionFileCache;
 
   private constructor() {
     this.searchCtrl = SearchController.getInstance();
     this.memoryCtrl = MemoryController.getInstance();
     this.compressor = new CompressContextTool();
+    this.sessionCache = SessionFileCache.getInstance();
   }
 
   static getInstance(): ContextController {
@@ -132,36 +142,100 @@ export class ContextController {
         memoriesCount: 0,
         tokensSaved: 0,
         compressionRatio: 0,
+        sessionCacheHits: 0,
+        tokensSavedBySessionCache: 0,
       };
     }
 
-    // Step 3: Assemble raw context
+    // Step 3: Build session-cache delivery plan for each code chunk
+    //
+    // If the caller supplies a sessionId we check each chunk against
+    // SessionFileCache.  Unchanged chunks are replaced with a compact
+    // reference tag; changed chunks are replaced with a diff block.  This
+    // eliminates redundant re-reading of stable files across calls.
+    interface DeliveryItem {
+      result: any;
+      kind: "full" | "ref" | "diff";
+      diff?: string;
+      tokensSaved: number;
+    }
+
+    let sessionCacheHits = 0;
+    let tokensSavedBySessionCache = 0;
+
+    const deliveryPlan: DeliveryItem[] = workingSet.map((r: any) => {
+      if (!sessionId) {
+        return { result: r, kind: "full", tokensSaved: 0 };
+      }
+
+      const content = r.content || r.preview || "";
+      const key = this.sessionCache.chunkKey(
+        r.filePath || "unknown",
+        r.lineStart ?? 0,
+        r.lineEnd ?? 0,
+      );
+      const check = this.sessionCache.check(sessionId, key, content);
+
+      if (check.status === "unchanged") {
+        sessionCacheHits++;
+        tokensSavedBySessionCache += check.tokensSaved;
+        return { result: r, kind: "ref", tokensSaved: check.tokensSaved };
+      }
+
+      if (check.status === "changed" && check.diff !== undefined) {
+        sessionCacheHits++;
+        tokensSavedBySessionCache += check.tokensSaved;
+        return { result: r, kind: "diff", diff: check.diff, tokensSaved: check.tokensSaved };
+      }
+
+      return { result: r, kind: "full", tokensSaved: 0 };
+    });
+
+    // Step 4: Assemble raw context
     const parts: string[] = [`# Context for: ${query}\n`];
 
     if (memorySection) {
       parts.push(memorySection, "");
     }
 
-    if (workingSet.length > 0) {
+    if (deliveryPlan.length > 0) {
+      const fullCount = deliveryPlan.filter((d) => d.kind === "full").length;
+      const refCount  = deliveryPlan.filter((d) => d.kind === "ref").length;
+      const diffCount = deliveryPlan.filter((d) => d.kind === "diff").length;
+
       parts.push(
-        `## Code (${workingSet.length} relevant sections, WM budget: ${wmBudget} tokens)\n`,
+        `## Code (${deliveryPlan.length} sections — ${fullCount} full, ${refCount} cached, ${diffCount} diff | WM budget: ${wmBudget} tokens)\n`,
       );
 
-      workingSet.forEach((r: any, idx: number) => {
-        parts.push(
-          `### ${idx + 1}. ${r.filePath || "Unknown"} (score: ${(r.score * 100).toFixed(1)}%)`,
-        );
-        parts.push(`Lines ${r.lineStart}-${r.lineEnd}\n`);
-        parts.push("```" + (r.language || ""));
-        parts.push(r.content || r.preview || "(no content)");
-        parts.push("```\n");
+      deliveryPlan.forEach(({ result: r, kind, diff }, idx) => {
+        const filePath   = r.filePath || "Unknown";
+        const scoreLabel = (r.score * 100).toFixed(1);
+        const lineRange  = `${r.lineStart ?? "?"}-${r.lineEnd ?? "?"}`;
+
+        parts.push(`### ${idx + 1}. ${filePath} (score: ${scoreLabel}%)`);
+        parts.push(`Lines ${lineRange}\n`);
+
+        if (kind === "ref") {
+          // Reference token — the LLM already holds this content in context
+          parts.push(`[CACHED: ${filePath}:${lineRange}]\n`);
+        } else if (kind === "diff" && diff) {
+          // Diff-only block
+          parts.push("```diff");
+          parts.push(diff);
+          parts.push("```\n");
+        } else {
+          // Full content (first delivery or session cache disabled)
+          parts.push("```" + (r.language || ""));
+          parts.push(r.content || r.preview || "(no content)");
+          parts.push("```\n");
+        }
       });
     }
 
     const rawContext = parts.join("\n");
     const rawTokens = estimateTokens(rawContext, "code");
 
-    // Step 4: Compress if needed
+    // Step 5: Compress if needed
     let finalContext = rawContext;
     let compressionRatio = 0;
     let tokensSaved = 0;
@@ -195,6 +269,8 @@ export class ContextController {
       codeSources: workingSet.length,
       memoriesIncluded: memories.length,
       wmBudget,
+      sessionCacheHits,
+      tokensSavedBySessionCache,
     });
 
     return {
@@ -204,6 +280,8 @@ export class ContextController {
       memoriesCount: memories.length,
       tokensSaved: rawTokens - finalTokens,
       compressionRatio,
+      sessionCacheHits,
+      tokensSavedBySessionCache,
     };
   }
 

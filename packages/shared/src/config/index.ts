@@ -169,6 +169,7 @@ export const defaultConfig: ServerConfig = {
       ".js",
       ".tsx",
       ".jsx",
+      ".dart",
       ".py",
       ".java",
       ".go",

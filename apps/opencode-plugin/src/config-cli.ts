@@ -8,7 +8,7 @@ import {
   saveConfig,
   initConfig,
   defaultTh0thConfig,
-} from "@th0th/shared/config";
+} from "@th0th-ai/shared/config";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -37,7 +37,7 @@ Commands:
 Examples:
   th0th-config init
   th0th-config init --mistral your-api-key
-  th0th-config use ollama --model bge-m3:latest
+  th0th-config use ollama --model nomic-embed-text:latest
   th0th-config use mistral --api-key your-key
   th0th-config set embedding.dimensions 1024
 `);

@@ -6,7 +6,7 @@
  * coordination from the SearchProjectTool.
  */
 
-import { logger } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
 import { ContextualSearchRLM } from "../services/search/contextual-search-rlm.js";
 import { minimatch } from "minimatch";
 

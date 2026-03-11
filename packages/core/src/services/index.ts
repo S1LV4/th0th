@@ -1,5 +1,5 @@
 /**
- * @th0th/core - Services Export
+ * @th0th-ai/core - Services Export
  */
 
 // Search
@@ -65,3 +65,11 @@ export type { MemoryCluster, ClusteringResult } from "./memory/memory-clustering
 export { CheckpointManager } from "./checkpoint/checkpoint-manager.js";
 export { AutoCheckpointer } from "./checkpoint/auto-checkpointer.js";
 export type { AutoCheckpointerOptions, CheckpointTrigger } from "./checkpoint/auto-checkpointer.js";
+
+// Context (session-scoped delivery optimizations)
+export { SessionFileCache, REFERENCE_TOKEN_COST } from "./context/session-file-cache.js";
+export type {
+  ChunkStatus,
+  ChunkCheckResult,
+  SessionCacheStats,
+} from "./context/session-file-cache.js";

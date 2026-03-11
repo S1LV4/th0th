@@ -1,6 +1,7 @@
 {
-  "name": "@th0th/core",
-  "version": "1.0.2",
+  "name": "@th0th-ai/core",
+  "version": "1.0.3",
+  "author": "S1LV4",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -41,7 +42,7 @@
     "@ai-sdk/openai": "^3.0.24",
     "@prisma/client": "^7.3.0",
     "@prisma/client-runtime-utils": "^7.3.0",
-    "@th0th/shared": "workspace:*",
+    "@th0th-ai/shared": "workspace:*",
     "@toon-format/toon": "^2.1.0",
     "ai": "^6.0.66",
     "glob": "^10.0.0",

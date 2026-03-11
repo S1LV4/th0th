@@ -9,7 +9,7 @@
  * This is the single entry point for all memory use cases.
  */
 
-import { logger, MemoryType, MemoryLevel } from "@th0th/shared";
+import { logger, MemoryType, MemoryLevel } from "@th0th-ai/shared";
 import { MemoryRepository } from "../data/memory/memory-repository.js";
 import {
   MemoryService,

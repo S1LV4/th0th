@@ -6,7 +6,7 @@
  */
 
 import { Elysia, t } from "elysia";
-import { SearchProjectTool, SearchCodeTool } from "@th0th/core";
+import { SearchProjectTool, SearchCodeTool } from "@th0th-ai/core";
 
 const searchProjectTool = new SearchProjectTool();
 const searchCodeTool = new SearchCodeTool();

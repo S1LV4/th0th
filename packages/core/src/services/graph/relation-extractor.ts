@@ -18,7 +18,7 @@ import {
   ExtractedRelation,
   config,
   logger,
-} from "@th0th/shared";
+} from "@th0th-ai/shared";
 import { EmbeddingService } from "../../data/chromadb/vector-store.js";
 import { GraphStore } from "./graph-store.js";
 import type { MemoryRowWithEmbedding as MemoryRow } from "./types.js";

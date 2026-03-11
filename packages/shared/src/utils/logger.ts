@@ -15,13 +15,40 @@ export enum LogLevel {
 }
 
 export class Logger implements ILogger {
-  private level: LogLevel;
-  private enableMetrics: boolean;
+  private _level?: LogLevel;
+  private _enableMetrics?: boolean;
+  private _initialized = false;
 
   constructor() {
-    const configLevel = config.get('logging').level;
-    this.level = this.parseLogLevel(configLevel);
-    this.enableMetrics = config.get('logging').enableMetrics;
+    // Lazy initialization to avoid circular dependency with config
+  }
+
+  /**
+   * Lazy initialize logger configuration
+   */
+  private ensureInitialized(): void {
+    if (!this._initialized) {
+      try {
+        const configLevel = config.get('logging').level;
+        this._level = this.parseLogLevel(configLevel);
+        this._enableMetrics = config.get('logging').enableMetrics;
+      } catch (error) {
+        // Fallback if config is not available yet
+        this._level = LogLevel.INFO;
+        this._enableMetrics = false;
+      }
+      this._initialized = true;
+    }
+  }
+
+  private get level(): LogLevel {
+    this.ensureInitialized();
+    return this._level!;
+  }
+
+  private get enableMetrics(): boolean {
+    this.ensureInitialized();
+    return this._enableMetrics!;
   }
 
   /**

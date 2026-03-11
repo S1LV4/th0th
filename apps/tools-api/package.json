@@ -1,6 +1,7 @@
 {
-  "name": "@th0th/tools-api",
-  "version": "1.0.2",
+  "name": "@th0th-ai/tools-api",
+  "version": "1.0.3",
+  "author": "S1LV4",
   "description": "th0th REST API server - Semantic code search, memory, and context compression",
   "type": "module",
   "main": "dist/index.js",
@@ -17,8 +18,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@th0th/core": "workspace:*",
-    "@th0th/shared": "workspace:*",
+    "@th0th-ai/core": "workspace:*",
+    "@th0th-ai/shared": "workspace:*",
     "elysia": "^1.2.25",
     "@elysiajs/swagger": "^1.2.0",
     "@elysiajs/cors": "^1.2.0",

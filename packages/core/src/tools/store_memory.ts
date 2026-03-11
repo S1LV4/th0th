@@ -5,8 +5,8 @@
  * All business logic lives in controllers/memory-controller.ts.
  */
 
-import { IToolHandler, ToolResponse, MemoryType } from "@th0th/shared";
-import { logger } from "@th0th/shared";
+import { IToolHandler, ToolResponse, MemoryType } from "@th0th-ai/shared";
+import { logger } from "@th0th-ai/shared";
 import { encode as toTOON } from "@toon-format/toon";
 import { MemoryController } from "../controllers/memory-controller.js";
 

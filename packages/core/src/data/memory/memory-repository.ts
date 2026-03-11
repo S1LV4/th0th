@@ -7,7 +7,7 @@
  */
 
 import { Database } from "bun:sqlite";
-import { config, logger, MemoryLevel, MemoryType } from "@th0th/shared";
+import { config, logger, MemoryLevel, MemoryType } from "@th0th-ai/shared";
 import path from "path";
 import fs from "fs";
 

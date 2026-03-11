@@ -5,7 +5,7 @@
  * and exposed through MemoryGraphService.
  */
 
-import { MemoryEdge } from "@th0th/shared";
+import { MemoryEdge } from "@th0th-ai/shared";
 
 /**
  * A row from the memories table (projection without embedding).

@@ -6,7 +6,7 @@
  */
 
 import { Elysia, t } from "elysia";
-import { CompressContextTool, GetOptimizedContextTool } from "@th0th/core";
+import { CompressContextTool, GetOptimizedContextTool } from "@th0th-ai/core";
 
 const compressContextTool = new CompressContextTool();
 const getOptimizedContextTool = new GetOptimizedContextTool();

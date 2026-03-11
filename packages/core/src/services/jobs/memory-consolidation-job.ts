@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import path from "path";
-import { config, logger, MemoryLevel } from "@th0th/shared";
+import { config, logger, MemoryLevel } from "@th0th-ai/shared";
 import { RedundancyFilter } from "../memory/redundancy-filter.js";
 
 interface ConsolidationStats {

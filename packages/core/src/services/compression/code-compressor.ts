@@ -5,11 +5,11 @@
  * Strategy: Keep structure, remove implementation details
  */
 
-import { ICompressor } from '@th0th/shared';
-import { CompressedContent, CompressionStrategy } from '@th0th/shared';
+import { ICompressor } from '@th0th-ai/shared';
+import { CompressedContent, CompressionStrategy } from '@th0th-ai/shared';
 import { CompressedContent as CompressedContentModel } from '../../models/CompressedContent.js';
-import { logger } from '@th0th/shared';
-import { MetricsCollector } from '@th0th/shared';
+import { logger } from '@th0th-ai/shared';
+import { MetricsCollector } from '@th0th-ai/shared';
 
 /**
  * Code structure patterns to preserve
@@ -228,7 +228,8 @@ export class CodeCompressor implements ICompressor {
     return (
       line.includes('function ') ||
       line.includes('=>') ||
-      /^(public|private|protected|async)?\s*\w+\s*\(/.test(line)
+      /^(public|private|protected|async)?\s*\w+\s*\(/.test(line) ||
+      /^(static\s+)?(?:Future(?:<[^>]+>)?|void|int|double|String|bool|dynamic|num|[A-Z]\w*(?:<[^>]+>)?)\s+\w+\s*\(/.test(line)
     );
   }
 
@@ -315,6 +316,23 @@ export class CodeCompressor implements ICompressor {
    * Detect programming language from content
    */
   private detectLanguage(content: string): string {
+    const hasDartOnlyDirective = /(\blibrary\s+[a-zA-Z_][\w.]*\s*;|\bpart\s+of\s+[a-zA-Z_][\w.]*\s*;)/.test(content);
+    const hasDartType = /\b(class|enum|mixin|extension)\s+\w+/.test(content);
+    const hasDartMain = /\bvoid\s+main\s*\(/.test(content);
+    const hasPartOfQuoted = /\bpart\s+of\s+['"][^'"]+['"]\s*;/.test(content);
+    const hasDartImport = /\bimport\s+['"](dart:|package:)[^'"]+['"]\s*;/.test(content);
+    const hasDartMixin = /\bmixin\s+\w+/.test(content);
+
+    if (
+      hasDartMain ||
+      hasPartOfQuoted ||
+      hasDartImport ||
+      (hasDartOnlyDirective && hasDartType) ||
+      (hasDartMixin && hasDartType)
+    ) {
+      return 'dart';
+    }
+
     if (content.includes('import ') && content.includes('from ')) {
       if (content.includes(': ') || content.includes('interface ')) {
         return 'typescript';

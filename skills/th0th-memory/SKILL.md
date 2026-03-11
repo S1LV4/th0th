@@ -67,13 +67,19 @@ th0th_search({
 
 Search + compress in one call. Maximum token efficiency.
 
+**Always pass `sessionId`** to activate the session file cache. On repeated calls within the same conversation, unchanged file chunks are replaced with a compact reference token (~8 tokens) instead of full content, saving 50-70% of input tokens in long sessions.
+
 ```
 th0th_optimized_context({
   query: "how does authentication work?",
+  projectId: "my-project",
+  sessionId: "<use a stable identifier for the current conversation>",
   maxTokens: 4000,
   maxResults: 5
 })
 ```
+
+The response includes `metadata.tokensSavedBySessionCache` and `data.sessionCacheHits` so you can observe the savings. Call `invalidateSession` (via the API) if the user explicitly asks for a fresh read of all files.
 
 ### 4. th0th_remember
 

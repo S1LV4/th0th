@@ -7,8 +7,8 @@
 
 import { createHash } from "crypto";
 import { Database } from "bun:sqlite";
-import { logger } from "@th0th/shared";
-import { config } from "@th0th/shared";
+import { logger } from "@th0th-ai/shared";
+import { config } from "@th0th-ai/shared";
 
 export interface EmbeddingCacheEntry {
   provider: string;
@@ -73,11 +73,11 @@ export class EmbeddingCache {
           created_at INTEGER NOT NULL,
           PRIMARY KEY (provider, model, content_hash)
         );
-        
+
         -- Index for cleanup by date
         CREATE INDEX IF NOT EXISTS idx_embedding_cache_created_at
         ON embedding_cache(created_at);
-        
+
         -- Index for stats queries
         CREATE INDEX IF NOT EXISTS idx_embedding_cache_provider_model
         ON embedding_cache(provider, model);
@@ -109,8 +109,8 @@ export class EmbeddingCache {
       const hash = this.hashContent(text);
 
       const stmt = this.db.prepare(`
-        SELECT embedding, dimensions 
-        FROM embedding_cache 
+        SELECT embedding, dimensions
+        FROM embedding_cache
         WHERE provider = ? AND model = ? AND content_hash = ?
       `);
 
@@ -156,7 +156,7 @@ export class EmbeddingCache {
       const embeddingBlob = this.serializeEmbedding(embedding);
 
       const stmt = this.db.prepare(`
-        INSERT OR REPLACE INTO embedding_cache 
+        INSERT OR REPLACE INTO embedding_cache
         (provider, model, content_hash, embedding, dimensions, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
       `);
@@ -176,15 +176,53 @@ export class EmbeddingCache {
 
   /**
    * Get embeddings for batch of texts
+   *
+   * Optimized: single SQL query with IN clause instead of N sequential queries.
+   * Falls back to sequential for empty input.
    */
   async getBatch(texts: string[]): Promise<Array<number[] | null>> {
-    const results: Array<number[] | null> = [];
+    if (texts.length === 0) return [];
 
-    for (const text of texts) {
-      results.push(await this.get(text));
+    try {
+      // Compute all hashes upfront
+      const hashes = texts.map((t) => this.hashContent(t));
+
+      // Single batch query with IN clause
+      const placeholders = hashes.map(() => "?").join(", ");
+      const rows = this.db
+        .prepare(
+          `SELECT content_hash, embedding, dimensions
+           FROM embedding_cache
+           WHERE provider = ? AND model = ? AND content_hash IN (${placeholders})`,
+        )
+        .all(this.provider, this.model, ...hashes) as Array<{
+        content_hash: string;
+        embedding: Buffer;
+        dimensions: number;
+      }>;
+
+      // Build a hash → row lookup for O(1) mapping
+      const rowByHash = new Map(rows.map((r) => [r.content_hash, r]));
+
+      // Reconstruct results in original order, tracking hits/misses
+      return hashes.map((hash) => {
+        const row = rowByHash.get(hash);
+        if (row) {
+          this.hits++;
+          return this.deserializeEmbedding(row.embedding, row.dimensions);
+        }
+        this.misses++;
+        return null;
+      });
+    } catch (error) {
+      logger.error("Embedding cache getBatch failed", error as Error);
+      // Graceful fallback: sequential get
+      const results: Array<number[] | null> = [];
+      for (const text of texts) {
+        results.push(await this.get(text));
+      }
+      return results;
     }
-
-    return results;
   }
 
   /**
@@ -195,19 +233,21 @@ export class EmbeddingCache {
       throw new Error("Texts and embeddings arrays must have same length");
     }
 
+    // Prepare statement ONCE outside the loop to avoid repeated SQL compilation
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO embedding_cache
+      (provider, model, content_hash, embedding, dimensions, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
     // Use transaction for batch insert
     const transaction = this.db.transaction(
       (items: Array<{ text: string; embedding: number[] }>) => {
+        const now = Date.now();
         for (const item of items) {
           const hash = this.hashContent(item.text);
           const dimensions = item.embedding.length;
           const embeddingBlob = this.serializeEmbedding(item.embedding);
-
-          const stmt = this.db.prepare(`
-          INSERT OR REPLACE INTO embedding_cache 
-          (provider, model, content_hash, embedding, dimensions, created_at)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `);
 
           stmt.run(
             this.provider,
@@ -215,7 +255,7 @@ export class EmbeddingCache {
             hash,
             embeddingBlob,
             dimensions,
-            Date.now(),
+            now,
           );
         }
       },
@@ -235,7 +275,7 @@ export class EmbeddingCache {
       const result = this.db
         .prepare(
           `
-        SELECT 
+        SELECT
           COUNT(*) as totalEntries,
           SUM(LENGTH(embedding)) as cacheSize,
           AVG(dimensions) as avgDimensions
@@ -274,7 +314,7 @@ export class EmbeddingCache {
       const result = this.db
         .prepare(
           `
-        DELETE FROM embedding_cache 
+        DELETE FROM embedding_cache
         WHERE created_at < ?
       `,
         )

@@ -11,8 +11,8 @@ import fs from "fs";
 import path from "path";
 import { glob } from "glob";
 import ignoreModule, { Ignore } from "ignore";
-import { logger, config } from "@th0th/shared";
-import type { IVectorStore } from "@th0th/shared";
+import { logger, config } from "@th0th-ai/shared";
+import type { IVectorStore } from "@th0th-ai/shared";
 
 const globAsync = glob;
 const ignore = (ignoreModule as any).default || ignoreModule;
@@ -291,6 +291,7 @@ export class IndexManager {
         ".js",
         ".tsx",
         ".jsx",
+        ".dart",
         ".py",
       ];
 

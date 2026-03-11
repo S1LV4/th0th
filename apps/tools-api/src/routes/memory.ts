@@ -11,9 +11,9 @@ import {
   StoreMemoryTool,
   SearchMemoriesTool,
   MemoryRepository,
-} from "@th0th/core";
-import type { MemoryRow } from "@th0th/core";
-import { logger } from "@th0th/shared";
+} from "@th0th-ai/core";
+import type { MemoryRow } from "@th0th-ai/core";
+import { logger } from "@th0th-ai/shared";
 
 const storeMemoryTool = new StoreMemoryTool();
 const searchMemoriesTool = new SearchMemoriesTool();

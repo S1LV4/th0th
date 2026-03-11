@@ -5,8 +5,8 @@
  * All business logic lives in controllers/search-controller.ts.
  */
 
-import { IToolHandler, ToolResponse } from "@th0th/shared";
-import { logger } from "@th0th/shared";
+import { IToolHandler, ToolResponse } from "@th0th-ai/shared";
+import { logger } from "@th0th-ai/shared";
 import { SearchController } from "../controllers/search-controller.js";
 
 interface SearchProjectParams {
