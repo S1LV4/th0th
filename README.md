@@ -6,6 +6,9 @@
 
 Semantic search with 98% token reduction for AI assistants.
 
+Como reduzi 98% do uso de contexto (e custos) de IA no meu workflow / How I reduced AI context usage (and costs) by 98% in my workflow
+https://www.tabnews.com.br/S1LV4/como-reduzi-em-98-por-cento-o-uso-de-contexto-e-os-custos-de-ia-no-meu-workflow
+
 ---
 
 ## Quick Start
