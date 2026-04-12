@@ -49,11 +49,14 @@ File: `~/.config/opencode/opencode.json`
 
 ```json
 {
-  "mcpServers": {
+  "mcp": {
     "th0th": {
       "type": "local",
-        "command": ["bunx", "@th0th-ai/mcp-client"],
-      "env": {
+      "command": [
+        "bunx",
+        "@th0th-ai/mcp-client"
+      ],
+      "environment": {
         "TH0TH_API_URL": "http://localhost:3333"
       },
       "enabled": true
