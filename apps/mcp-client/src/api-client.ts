@@ -42,7 +42,7 @@ export class ApiClient {
       const qs = new URLSearchParams(
         Object.entries(queryParams)
           .filter(([, v]) => v !== undefined && v !== null && v !== "")
-          .map(([k, v]) => [k, String(v)])
+          .map(([k, v]) => [k, String(v)] as [string, string])
       ).toString();
       if (qs) url = `${endpoint}?${qs}`;
     }
