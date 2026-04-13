@@ -145,7 +145,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         content: { type: "string", description: "Content to store" },
         type: {
           type: "string",
-          enum: ["preference", "conversation", "code", "decision", "pattern"],
+          enum: ["critical", "conversation", "code", "decision", "pattern"],
           description: "Type of memory",
         },
         userId: { type: "string", description: "User ID" },
@@ -201,7 +201,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           type: "array",
           items: {
             type: "string",
-            enum: ["preference", "conversation", "code", "decision", "pattern"],
+            enum: ["critical", "conversation", "code", "decision", "pattern"],
           },
           description: "Filter by memory types",
         },
@@ -451,6 +451,42 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
       },
       required: ["projectId", "symbolName"],
+    },
+  },
+
+  // ── Project reset ───────────────────────────────────────────────────────
+
+  {
+    name: "th0th_reset_project",
+    description:
+      "Delete all indexed data for a project: vector embeddings, symbol graph (definitions/references/imports/centrality), and stored memories. " +
+      "Use before a full reindex or to free space. Each scope (vectors, symbols, memories) can be toggled independently.",
+    apiEndpoint: "/api/v1/project/reset",
+    apiMethod: "POST",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: {
+          type: "string",
+          description: "The project ID to reset",
+        },
+        clearVectors: {
+          type: "boolean",
+          description: "Delete vector embeddings used for semantic search (default: true)",
+          default: true,
+        },
+        clearSymbols: {
+          type: "boolean",
+          description: "Delete symbol graph: definitions, references, imports, file index, centrality scores (default: true)",
+          default: true,
+        },
+        clearMemories: {
+          type: "boolean",
+          description: "Delete stored memories for this project (default: true)",
+          default: true,
+        },
+      },
+      required: ["projectId"],
     },
   },
 ];

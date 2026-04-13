@@ -84,13 +84,13 @@ export class MemoryService {
     const { userId, sessionId, projectId, agentId } = opts;
 
     // Agent hierarchy overrides
-    if (agentId === "orchestrator" && type === "decision") {
+    if (agentId === "orchestrator" && (type === "decision" || type === "critical")) {
       return MemoryLevel.PERSISTENT; // L0
     }
-    if (agentId === "architect" && (type === "pattern" || type === "code")) {
+    if (agentId === "architect" && (type === "pattern" || type === "code" || type === "critical")) {
       return MemoryLevel.PROJECT; // L1
     }
-    if (agentId === "optimizer" && type === "preference") {
+    if (agentId === "optimizer" && type === "critical") {
       return MemoryLevel.USER; // L2
     }
 
@@ -101,7 +101,7 @@ export class MemoryService {
 
     // Type-based defaults
     switch (type) {
-      case "preference":
+      case "critical":
         return MemoryLevel.USER;
       case "conversation":
         return MemoryLevel.SESSION;
@@ -226,7 +226,7 @@ export class MemoryService {
         return 1.0;
       case MemoryType.PATTERN:
         return 0.9;
-      case MemoryType.PREFERENCE:
+      case MemoryType.CRITICAL:
         return 0.85;
       case MemoryType.CODE:
         return 0.8;

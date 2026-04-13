@@ -1,25 +1,3 @@
-/**
- * Token Metrics Service
- *
- * Unified observability for token savings across all optimization modules:
- * - SessionFileCache: Diff-only context delivery (unchanged/changed chunks)
- * - RedundancyFilter: Memory deduplication savings
- * - ContextController: Compression and session cache aggregation
- *
- * Provides:
- * - Real-time counters for each optimization type
- * - Aggregated savings across all sessions
- * - Cost savings estimates using models.dev dynamic pricing API
- * - Historical tracking with time-series data
- * - Per-model cost tracking
- *
- * Usage:
- *   const metrics = TokenMetrics.getInstance();
- *   metrics.recordSessionCacheSavings(150);
- *   metrics.recordRedundancyFilterSavings(2500);
- *   const stats = await metrics.getStats("gpt-4");
- */
-
 import { logger, estimateTokens } from "@th0th-ai/shared";
 
 // ── Types ────────────────────────────────────────────────────────
@@ -372,13 +350,14 @@ export class TokenMetrics {
    */
   async getSummary(modelId: string = "gpt-4"): Promise<string> {
     const stats = await this.getStats(modelId);
+    const pct = (n: number, d: number) => d === 0 ? 0 : (n / d) * 100;
     const lines: string[] = [
       "Token Savings Summary",
       "━".repeat(50),
       `Total Saved: ${stats.savings.total.toLocaleString()} tokens`,
-      `  └─ Session Cache: ${stats.savings.sessionCache.toLocaleString()} (${((stats.savings.sessionCache / stats.savings.total) * 100).toFixed(1)}%)`,
-      `  └─ Redundancy Filter: ${stats.savings.redundancyFilter.toLocaleString()} (${((stats.savings.redundancyFilter / stats.savings.total) * 100).toFixed(1)}%)`,
-      `  └─ Compression: ${stats.savings.compression.toLocaleString()} (${((stats.savings.compression / stats.savings.total) * 100).toFixed(1)}%)`,
+      `  └─ Session Cache: ${stats.savings.sessionCache.toLocaleString()} (${pct(stats.savings.sessionCache, stats.savings.total).toFixed(1)}%)`,
+      `  └─ Redundancy Filter: ${stats.savings.redundancyFilter.toLocaleString()} (${pct(stats.savings.redundancyFilter, stats.savings.total).toFixed(1)}%)`,
+      `  └─ Compression: ${stats.savings.compression.toLocaleString()} (${pct(stats.savings.compression, stats.savings.total).toFixed(1)}%)`,
       "",
       `Requests Served: ${stats.requestsServed}`,
       `Overall Compression: ${(stats.overallCompressionRatio * 100).toFixed(1)}%`,

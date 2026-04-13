@@ -89,7 +89,7 @@ export class SearchController {
       projectId,
       projectPath,
       maxResults = 10,
-      minScore = 0.3,
+      minScore = 0.3,  // Voltando para 0.3 pois o novo algoritmo gera scores mais distribuídos
       responseMode = "summary",
       autoReindex = false,
       include,
@@ -154,7 +154,7 @@ export class SearchController {
         lineStart: r.metadata?.lineStart,
         lineEnd: r.metadata?.lineEnd,
         language: r.metadata?.language,
-        preview: this.generatePreview(r),
+        preview: this.generatePreview(r, query),  // Passar query para gerar preview contextual
         ...(r.explanation && { explanation: r.explanation }),
       };
 
@@ -165,19 +165,41 @@ export class SearchController {
       return base;
     });
 
+    // Generate intelligent recommendations
+    const recommendations: string[] = [];
+    
+    // Add reindex recommendations
+    if ((reindexInfo as any)?.deferred) {
+      recommendations.push("Indexing deferred to keep this search responsive");
+      recommendations.push("Run th0th_index(projectPath, projectId) and poll th0th_get_index_status(jobId)");
+    }
+
+    // Add usage recommendations based on response mode
+    if (responseMode === "summary" && formattedResults.length > 0) {
+      recommendations.push("Use Read(file, lineStart, lineEnd) for specific code snippets (60% token savings)");
+
+      if (formattedResults.length >= 3) {
+        recommendations.push("Use th0th_optimized_context(query) for compressed multi-file context");
+      }
+    }
+
+    if (responseMode === "full") {
+      recommendations.push("Full mode uses ~3x more tokens. Consider summary mode + Read() for better efficiency");
+    }
+
+    // Add project-specific recommendations
+    if (formattedResults.length === 0) {
+      recommendations.push("Try lowering minScore (current: " + minScore + ") or different query terms");
+      recommendations.push("Check if project is indexed: th0th_list_projects()");
+    }
+
     return {
       query,
       projectId,
       responseMode,
       tokenSavings: responseMode === "summary" ? "~70% vs full mode" : "none",
       indexStatus: reindexInfo || { wasStale: false, reindexed: false },
-      recommendations:
-        (reindexInfo as any)?.deferred
-          ? [
-              "Indexing deferred to keep this search responsive",
-              "Run th0th_index(projectPath, projectId) and poll th0th_get_index_status(jobId)",
-            ]
-          : [],
+      recommendations,
       filters: {
         applied:
           (include && include.length > 0) ||
@@ -218,7 +240,7 @@ export class SearchController {
     return info;
   }
 
-  generatePreview(result: any): string {
+  generatePreview(result: any, query?: string): string {
     if (result.metadata?.context?.preview) {
       return result.metadata.context.preview;
     }
@@ -230,6 +252,27 @@ export class SearchController {
 
     if (lines.length === 0) return "(empty)";
 
+    // Se temos uma query, tentar encontrar linhas que contenham termos relevantes
+    if (query) {
+      const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+      
+      // Primeiro, tentar encontrar linhas que contenham termos da query
+      for (const line of lines) {
+        const lowerLine = line.toLowerCase();
+        const hasQueryTerm = queryTerms.some(term => lowerLine.includes(term));
+        
+        if (hasQueryTerm) {
+          const trimmed = line.trim();
+          if (trimmed.length > 0 && !trimmed.startsWith("import ")) {
+            return trimmed.length > 150
+              ? trimmed.substring(0, 147) + "..."
+              : trimmed;
+          }
+        }
+      }
+    }
+
+    // Fallback: primeira linha significativa
     const significantLine =
       lines.find((l: string) => {
         const t = l.trim();
@@ -242,8 +285,8 @@ export class SearchController {
       }) || lines[0];
 
     const preview = significantLine.trim();
-    return preview.length > 100
-      ? preview.substring(0, 97) + "..."
+    return preview.length > 150
+      ? preview.substring(0, 147) + "..."
       : preview;
   }
 

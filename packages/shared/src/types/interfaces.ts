@@ -99,14 +99,53 @@ export interface ICompressor {
 /**
  * Vector Store Interface
  * 
- * Abstracts vector database operations (ChromaDB)
+ * Abstracts vector database operations (SQLite, PostgreSQL+pgvector)
+ * Supports multiple backend implementations with consistent API.
  */
 export interface IVectorStore {
+  // Core document operations
   addDocument(id: string, content: string, metadata?: Record<string, unknown>): Promise<void>;
-  search(query: string, limit?: number): Promise<SearchResult[]>;
-  delete(id: string): Promise<boolean>;
+  addDocuments(documents: VectorDocument[]): Promise<void>;
   update(id: string, content: string, metadata?: Record<string, unknown>): Promise<void>;
+  delete(id: string): Promise<boolean>;
+  deleteByProject(projectId: string): Promise<number>;
+  
+  // Search operations
+  search(query: string, limit?: number, projectId?: string): Promise<SearchResult[]>;
+  searchByEmbedding(embedding: number[], limit?: number, projectId?: string): Promise<SearchResult[]>;
+  
+  // Collection management
   getCollection(name: string): Promise<IVectorCollection>;
+  
+  // Statistics and metadata
+  getStats(projectId?: string): Promise<VectorStoreStats>;
+  listProjects(): Promise<ProjectInfo[]>;
+  
+  // Health and lifecycle
+  healthCheck(): Promise<boolean>;
+  close(): Promise<void>;
+}
+
+/**
+ * Vector Store Statistics
+ */
+export interface VectorStoreStats {
+  totalDocuments: number;
+  totalSize: number;
+  embeddingDimensions?: number;  // For validation (e.g., PostgreSQL schema vs provider)
+  indexType?: string;            // 'none' | 'hnsw' | 'ivfflat'
+  indexStatus?: 'building' | 'ready' | 'stale' | 'none';
+}
+
+/**
+ * Project Information
+ */
+export interface ProjectInfo {
+  projectId: string;
+  projectPath: string | null;
+  documentCount: number;
+  totalSize: number;
+  lastIndexed: string | null;
 }
 
 /**

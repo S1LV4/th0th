@@ -260,11 +260,16 @@ export class MemoryRepository {
     const whereClause =
       conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    // Convert query to OR-based FTS5 syntax for better recall
+    // Convert query to OR-based FTS5 syntax for better recall.
+    // Each term is wrapped in double quotes to prevent FTS5 from
+    // interpreting special characters (e.g. "-" as NOT operator).
+    // Without quoting, "Agente-GT" would be parsed as "Agente NOT column:GT"
+    // causing "no such column: GT" errors.
     const ftsQuery = query
       .trim()
       .split(/\s+/)
       .filter((t) => t.length > 0)
+      .map((t) => `"${t.replace(/"/g, '""')}"`)
       .join(" OR ");
 
     const sql = `
@@ -285,6 +290,28 @@ export class MemoryRepository {
     params.push(filters.limit);
 
     return this.db.prepare(sql).all(...params) as MemoryRow[];
+  }
+
+  /**
+   * Delete all memories belonging to a project.
+   * Returns the number of rows deleted.
+   */
+  deleteByProject(projectId: string): number {
+    // Remove from FTS index first (content table trigger would do this, but
+    // the FTS table is an external-content table so we must do it manually).
+    this.db
+      .prepare(
+        `INSERT INTO memories_fts(memories_fts, rowid, content, tags)
+         SELECT 'delete', m.rowid, m.content, m.tags
+         FROM memories m WHERE m.project_id = ?`,
+      )
+      .run(projectId);
+
+    const result = this.db
+      .prepare(`DELETE FROM memories WHERE project_id = ?`)
+      .run(projectId);
+
+    return result.changes;
   }
 
   /**

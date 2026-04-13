@@ -4,23 +4,14 @@ set -e
 # ========================================
 # th0th - VSCode/Antigravity Setup Script
 # ========================================
-# Configura th0th para uso com VSCode Copilot ou Antigravity
+# Configures th0th for use with VSCode Copilot or Antigravity.
 #
-# Uso: ./scripts/setup-vscode.sh
+# Usage: ./scripts/setup-vscode.sh
 # ========================================
 
-BOLD='\033[1m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-echo ""
-echo -e "${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║             th0th - VSCode/Antigravity Setup                 ║${NC}"
-echo -e "${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
-echo ""
+# shellcheck source=scripts/banner.sh
+source "$(dirname "${BASH_SOURCE[0]}")/banner.sh"
+th0th_banner
 
 # Get th0th root directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

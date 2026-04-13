@@ -10,41 +10,14 @@
  */
 
 import { glob } from "glob";
-import ignoreModule, { type Ignore } from "ignore";
+import type { Ignore } from "ignore";
 import fs from "fs/promises";
 import path from "path";
 import { createHash } from "crypto";
 import { config, logger } from "@th0th-ai/shared";
-import { symbolRepository } from "../../../data/sqlite/symbol-repository.js";
+import { getSymbolRepository } from "../../../data/sqlite/symbol-repository-factory.js";
 import type { EtlStageContext, DiscoveredFile } from "../stage-context.js";
-
-const ignore = (ignoreModule as unknown as { default: typeof ignoreModule }).default ?? ignoreModule;
-
-const DEFAULT_EXTENSIONS = [".ts", ".js", ".tsx", ".jsx", ".dart", ".py"];
-
-const DEFAULT_IGNORES = [
-  "node_modules/**",
-  ".git/**",
-  "dist/**",
-  "build/**",
-  "coverage/**",
-  "*.db",
-  "*.db-shm",
-  "*.db-wal",
-  ".env",
-  ".env.*",
-  "**/generated/**",
-  "**/*.generated.*",
-  "**/*.d.ts",
-  "**/*.wasm*",
-  "**/*.min.*",
-  "**/*.map",
-  "**/lock.yaml",
-  "**/pnpm-lock.yaml",
-  "**/package-lock.json",
-  "**/bun.lockb",
-  "**/yarn.lock",
-];
+import { DEFAULT_EXTENSIONS, loadProjectIgnore } from "../../search/ignore-patterns.js";
 
 export class DiscoverStage {
   /**
@@ -87,11 +60,14 @@ export class DiscoverStage {
         dot: false,
         absolute: false,
       });
-      relPaths = found.filter((p) => !ig.ignores(p));
+      // Ensure paths are relative (ignore library requires relative paths)
+      relPaths = found
+        .map((p) => (path.isAbsolute(p) ? path.relative(ctx.projectPath, p) : p))
+        .filter((p) => !ig.ignores(p));
     }
 
     // Load stored centrality scores for priority ordering
-    const centralityMap = symbolRepository.getCentrality(ctx.projectId);
+    const centralityMap = await getSymbolRepository().getCentrality(ctx.projectId);
 
     // Process files and compute fingerprints in parallel (batches of 30)
     const discovered: DiscoveredFile[] = [];
@@ -166,7 +142,7 @@ export class DiscoverStage {
       let needsReparse = forceReindex;
 
       if (!forceReindex) {
-        const stored = symbolRepository.getFile(ctx.projectId, relativePath);
+        const stored = await getSymbolRepository().getFile(ctx.projectId, relativePath);
         needsReparse = !stored || stored.content_hash !== contentHash;
       }
 
@@ -187,21 +163,7 @@ export class DiscoverStage {
     }
   }
 
-  private async loadIgnore(projectPath: string): Promise<Ignore> {
-    const ig = ignore();
-    ig.add(DEFAULT_IGNORES);
-
-    try {
-      const content = await fs.readFile(path.join(projectPath, ".gitignore"), "utf-8");
-      const rules = content
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l && !l.startsWith("#"));
-      ig.add(rules);
-    } catch {
-      // no .gitignore — use defaults only
-    }
-
-    return ig;
+  private loadIgnore(projectPath: string): Promise<Ignore> {
+    return loadProjectIgnore(projectPath);
   }
 }

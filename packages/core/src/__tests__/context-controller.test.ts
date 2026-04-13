@@ -351,7 +351,7 @@ describe("ContextController", () => {
             {
               id: "mem1",
               content: "User prefers dark mode",
-              type: "preference",
+              type: "critical",
               importance: 0.8,
               score: 0.7,
               agentId: "optimizer",
@@ -364,7 +364,7 @@ describe("ContextController", () => {
       });
 
       const result = await controller.getOptimizedContext({
-        query: "user preferences",
+        query: "user critical",
         projectId: "proj1",
         maxTokens: 10000,
         includeMemories: true,
@@ -379,7 +379,7 @@ describe("ContextController", () => {
       controller = buildFakeController({
         memorySearch: async () => ({
           memories: [
-            { id: "mem1", content: "hidden", type: "preference", importance: 0.5 },
+            { id: "mem1", content: "hidden", type: "critical", importance: 0.5 },
           ],
           relatedSummaries: {},
           query: "test",
@@ -477,12 +477,12 @@ describe("ContextController", () => {
   describe("formatMemorySection", () => {
     test("formats memories with type labels", () => {
       const memories = [
-        { type: "preference", content: "likes dark mode", importance: 0.8, score: 0.9, agentId: "optimizer" },
+        { type: "critical", content: "likes dark mode", importance: 0.8, score: 0.9, agentId: "optimizer" },
       ];
 
       const section = controller.formatMemorySection(memories, 1000);
       expect(section).not.toBeNull();
-      expect(section).toContain("PREFERENCE");
+      expect(section).toContain("CRITICAL"); // Type is uppercased
       expect(section).toContain("dark mode");
       expect(section).toContain("optimizer");
       expect(section).toContain("Relevant Memories");

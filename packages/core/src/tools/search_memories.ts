@@ -43,7 +43,7 @@ export class SearchMemoriesTool implements IToolHandler {
         type: "array",
         items: {
           type: "string",
-          enum: ["preference", "conversation", "code", "decision", "pattern"],
+          enum: ["critical", "conversation", "code", "decision", "pattern"],
         },
         description: "Filter by memory types",
       },
@@ -139,7 +139,7 @@ export class SearchMemoriesTool implements IToolHandler {
       logger.error("Failed to search memories", error as Error, { query });
       return {
         success: false,
-        error: `Failed to search memories: ${(error as Error).message}`,
+        error: `Failed to search memories: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
   }

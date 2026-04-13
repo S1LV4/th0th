@@ -10,7 +10,7 @@
  */
 
 import { logger, MemoryType, MemoryLevel } from "@th0th-ai/shared";
-import { MemoryRepository } from "../data/memory/memory-repository.js";
+import { getMemoryRepository } from "../data/memory/memory-repository-factory.js";
 import {
   MemoryService,
   type Memory,
@@ -65,12 +65,12 @@ export interface SearchMemoryResult {
 export class MemoryController {
   private static instance: MemoryController | null = null;
 
-  private readonly repo: MemoryRepository;
+  private readonly repo: ReturnType<typeof getMemoryRepository>;
   private readonly service: MemoryService;
   private readonly graph: MemoryGraphService;
 
   private constructor() {
-    this.repo = MemoryRepository.getInstance();
+    this.repo = getMemoryRepository();
     this.service = MemoryService.getInstance();
     this.graph = MemoryGraphService.getInstance();
   }
@@ -110,7 +110,7 @@ export class MemoryController {
     const embedding = await this.service.generateEmbedding(content);
 
     // 3. Persist via repository
-    this.repo.insert({
+    await this.repo.insert({
       id,
       content,
       type,
@@ -171,16 +171,13 @@ export class MemoryController {
     // 1. Generate query embedding
     const queryEmbedding = await this.service.generateEmbedding(query);
 
-    // 2. FTS pre-filter via repository
-    const ftsRows = this.repo.fullTextSearch(query, {
+    // 2. FTS pre-filter via repository (with scope filters)
+    const ftsRows = await this.repo.fullTextSearch(query, limit * 3, {
       userId,
       sessionId,
       projectId,
       agentId,
-      types,
       minImportance,
-      includePersistent,
-      limit: limit * 3,
     });
 
     logger.info("FTS search completed", {
@@ -189,7 +186,7 @@ export class MemoryController {
     });
 
     // 3. Map to domain objects
-    const memories = ftsRows.map((row) => this.service.rowToMemory(row));
+    const memories = ftsRows.map((row: any) => this.service.rowToMemory(row));
 
     // 4. Semantic ranking
     const hasValidEmbedding = queryEmbedding.some((v) => v !== 0);
@@ -197,7 +194,7 @@ export class MemoryController {
       ? this.service.semanticRank(memories, queryEmbedding, limit)
       : memories
           .slice(0, limit)
-          .map((m) => ({ ...m, score: 1.0 }) as ScoredMemory);
+          .map((m: any) => ({ ...m, score: 1.0 }) as ScoredMemory);
 
     logger.info("Ranking completed", {
       resultsCount: rankedResults.length,
@@ -206,7 +203,7 @@ export class MemoryController {
     });
 
     // 5. Update access counts
-    this.repo.updateAccessCounts(rankedResults.map((r) => r.id));
+    await Promise.all(rankedResults.map((r: any) => this.repo.incrementAccessCount(r.id)));
 
     // 6. Background consolidation (non-blocking)
     memoryConsolidationJob.maybeRun("search");

@@ -8,27 +8,33 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ========================================
 // Memories (sincronizado de memories.db)
 // ========================================
 model Memory {
-  id            String   @id
+  id            String    @id
   content       String
-  type          String   // preference, conversation, code, decision, pattern
+  type          String    // preference, conversation, code, decision, pattern
   level         Int
-  userId        String?  @map("user_id")
-  sessionId     String?  @map("session_id")
-  projectId     String?  @map("project_id")
-  agentId       String?  @map("agent_id")
-  importance    Float    @default(0.5)
-  tags          String?  // JSON array
-  metadata      String?
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  accessCount   Int      @default(0) @map("access_count")
+  userId        String?   @map("user_id")
+  sessionId     String?   @map("session_id")
+  projectId     String?   @map("project_id")
+  agentId       String?   @map("agent_id")
+  importance    Float     @default(0.5)
+  tags          String[]  @default([]) // Migrated from CSV to native array
+  embedding     Bytes?    // Vector embedding stored as bytes (cache only, not for similarity search)
+  metadata      Json?     // Migrated from String to Json for structured queries
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  accessCount   Int       @default(0) @map("access_count")
+  lastAccessed  DateTime? @map("last_accessed")
+
+  // Relations
+  edgesFrom MemoryEdge[] @relation("EdgeFrom")
+  edgesTo   MemoryEdge[] @relation("EdgeTo")
 
   @@index([userId])
   @@index([sessionId])
@@ -37,6 +43,7 @@ model Memory {
   @@index([type])
   @@index([importance(sort: Desc)])
   @@index([createdAt(sort: Desc)])
+  @@index([tags]) // GIN index for array containment queries
   @@map("memories")
 }
 
@@ -55,7 +62,6 @@ model Project {
 
   documents Document[]
 
-  @@index([projectId])
   @@index([lastIndexed(sort: Desc)])
   @@map("projects")
 }
@@ -99,10 +105,235 @@ model CacheStats {
   queryHash String   @map("query_hash")
   hitCount  Int      @default(0) @map("hit_count")
   createdAt DateTime @default(now()) @map("created_at")
-  lastHitAt DateTime @updatedAt @map("last_hit_at")
+  lastHitAt DateTime @default(now()) @map("last_hit_at")
 
   @@unique([projectId, queryHash])
   @@index([projectId])
   @@index([hitCount(sort: Desc)])
   @@map("cache_stats")
+}
+
+// ========================================
+// Symbol Database Tables
+// ========================================
+
+// Workspace / Project registry
+model Workspace {
+  projectId      String    @id @map("project_id")
+  projectPath    String    @map("project_path")
+  displayName    String?   @map("display_name")
+  status         String    @default("pending") // pending, indexing, indexed, error
+  lastIndexedAt  DateTime? @map("last_indexed_at")
+  lastError      String?   @map("last_error")
+  filesCount     Int       @default(0) @map("files_count")
+  chunksCount    Int       @default(0) @map("chunks_count")
+  symbolsCount   Int       @default(0) @map("symbols_count")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  files        SymbolFile[]
+  definitions  SymbolDefinition[]
+  references   SymbolReference[]
+  imports      SymbolImport[]
+  centralities SymbolCentrality[]
+
+  @@index([status])
+  @@index([projectPath])
+  @@map("workspaces")
+}
+
+// File fingerprints - tracks per-file content hash
+model SymbolFile {
+  projectId    String   @map("project_id")
+  relativePath String   @map("relative_path")
+  contentHash  String   @map("content_hash")
+  mtime        BigInt
+  size         Int      @default(0)
+  indexedAt    DateTime @map("indexed_at")
+  symbolCount  Int      @default(0) @map("symbol_count")
+  chunkCount   Int      @default(0) @map("chunk_count")
+
+  workspace Workspace @relation(fields: [projectId], references: [projectId], onDelete: Cascade)
+
+  @@id([projectId, relativePath])
+  @@index([projectId])
+  @@map("symbol_files")
+}
+
+// Symbol definitions - one row per symbol (function, class, variable, type, interface)
+model SymbolDefinition {
+  id         String   @map("id")
+  projectId  String   @map("project_id")
+  filePath   String   @map("file_path")
+  name       String
+  kind       String   // function, class, variable, type, interface, export
+  lineStart  Int      @map("line_start")
+  lineEnd    Int      @map("line_end")
+  exported   Boolean  @default(false)
+  docComment String?  @map("doc_comment")
+  indexedAt  DateTime @map("indexed_at")
+
+  workspace Workspace @relation(fields: [projectId], references: [projectId], onDelete: Cascade)
+
+  @@id([projectId, id])
+  @@index([projectId])
+  @@index([projectId, filePath])
+  @@index([projectId, name])
+  @@map("symbol_definitions")
+}
+
+// Symbol references - one row per usage site
+model SymbolReference {
+  id         Int    @id @default(autoincrement())
+  projectId  String @map("project_id")
+  fromFile   String @map("from_file")
+  fromLine   Int    @map("from_line")
+  symbolName String @map("symbol_name")
+  targetFqn  String @map("target_fqn") // NOT NULL: reference without FQN is invalid
+  refKind    String @map("ref_kind") // call, type_ref, import, extend, implement
+
+  workspace Workspace @relation(fields: [projectId], references: [projectId], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([projectId, targetFqn]) // CRITICAL: find references query
+  @@index([projectId, fromFile])
+  @@map("symbol_references")
+}
+
+// Import edges - file-level dependency graph
+model SymbolImport {
+  id            Int      @id @default(autoincrement())
+  projectId     String   @map("project_id")
+  fromFile      String   @map("from_file")
+  toFile        String?  @map("to_file")
+  specifier     String
+  importedNames String[] @default([]) @map("imported_names") // Migrated from CSV to text[] for GIN index queries
+  isExternal    Boolean  @default(false) @map("is_external")
+  isTypeOnly    Boolean  @default(false) @map("is_type_only")
+
+  workspace Workspace @relation(fields: [projectId], references: [projectId], onDelete: Cascade)
+
+  @@index([projectId, fromFile])
+  @@index([projectId, toFile])
+  @@index([importedNames]) // GIN index for "find imports of Symbol X"
+  @@map("symbol_imports")
+}
+
+// Centrality scores - PageRank per file
+model SymbolCentrality {
+  projectId String   @map("project_id")
+  filePath  String   @map("file_path")
+  score     Float    @default(0)
+  updatedAt DateTime @map("updated_at")
+
+  workspace Workspace @relation(fields: [projectId], references: [projectId], onDelete: Cascade)
+
+  @@id([projectId, filePath])
+  @@map("symbol_centrality")
+}
+
+// ========================================
+// Graph Store (Memory relationships)
+// ========================================
+model MemoryEdge {
+  id         Int      @id @default(autoincrement())
+  fromId     String   @map("from_id")
+  toId       String   @map("to_id")
+  edgeType   String   @map("edge_type") // relates_to, conflicts_with, depends_on, derived_from
+  weight     Float    @default(1.0)
+  metadata   Json?    // Migrated from String to Json
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Foreign Keys to prevent dangling edges
+  fromMemory Memory @relation("EdgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toMemory   Memory @relation("EdgeTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId, edgeType])
+  @@index([fromId])
+  @@index([toId])
+  @@index([edgeType])
+  @@map("memory_edges")
+}
+
+// ========================================
+// Embedding Cache
+// ========================================
+model EmbeddingCache {
+  textHash   String   @id @map("text_hash")
+  embedding  Bytes
+  model      String   @default("nomic-embed-text")
+  createdAt  DateTime @default(now()) @map("created_at")
+  accessedAt DateTime @default(now()) @map("accessed_at")
+  hitCount   Int      @default(1) @map("hit_count")
+
+  @@index([model])
+  @@index([accessedAt(sort: Desc)])
+  @@map("embedding_cache")
+}
+
+// ========================================
+// Vector Store - Multi-Dimension Support
+// ========================================
+// NOTE: Using Unsupported("vector") because Prisma doesn't natively support pgvector.
+// Vector similarity queries (ORDER BY embedding <=> $1::vector) must use raw SQL.
+// CRUD operations can use Prisma for type safety.
+
+// Base template for vector documents - NOT USED DIRECTLY
+// Dynamic tables created per dimension: vector_documents_1024d, vector_documents_3072d
+model VectorDocument1024 {
+  id         String                         @id
+  projectId  String                         @map("project_id")
+  content    String
+  metadata   Json                           @default("{}")
+  embedding  Unsupported("vector(1024)")?
+  createdAt  DateTime                       @default(now()) @map("created_at")
+  updatedAt  DateTime                       @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@map("vector_documents_1024d")
+}
+
+model VectorDocument3072 {
+  id         String                         @id
+  projectId  String                         @map("project_id")
+  content    String
+  metadata   Json                           @default("{}")
+  embedding  Unsupported("vector(3072)")?
+  createdAt  DateTime                       @default(now()) @map("created_at")
+  updatedAt  DateTime                       @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@map("vector_documents_3072d")
+}
+
+// Legacy table for backward compatibility (if exists)
+model VectorDocumentLegacy {
+  id         String                        @id
+  projectId  String                        @map("project_id")
+  content    String
+  metadata   Json                          @default("{}")
+  embedding  Unsupported("vector(1024)")?
+  createdAt  DateTime                      @default(now()) @map("created_at")
+  updatedAt  DateTime                      @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@map("vector_documents")
+}
+
+// 4096-dimension table (qwen3-embedding) with binary quantization for HNSW indexing.
+// pgvector HNSW supports any dimension on bit columns (bit_hamming_ops).
+// Search strategy: Phase 1 ANN on embedding_bq → Phase 2 exact cosine re-rank on embedding.
+model VectorDocument4096 {
+  id          String                       @id
+  projectId   String                       @map("project_id")
+  content     String
+  metadata    Json                         @default("{}")
+  embedding   Unsupported("vector(4096)")?
+  embeddingBq Unsupported("bit(4096)")?   @map("embedding_bq")
+  createdAt   DateTime                     @default(now()) @map("created_at")
+  updatedAt   DateTime                     @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@map("vector_documents_4096d")
 }

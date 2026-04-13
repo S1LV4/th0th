@@ -32,7 +32,7 @@ export class StoreMemoryTool implements IToolHandler {
       content: { type: "string", description: "Content to store" },
       type: {
         type: "string",
-        enum: ["preference", "conversation", "code", "decision", "pattern"],
+        enum: ["critical", "conversation", "code", "decision", "pattern"],
         description: "Type of memory",
       },
       userId: { type: "string", description: "User ID" },
@@ -107,7 +107,7 @@ export class StoreMemoryTool implements IToolHandler {
       logger.error("Failed to store memory", error as Error, { type });
       return {
         success: false,
-        error: `Failed to store memory: ${(error as Error).message}`,
+        error: `Failed to store memory: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
   }

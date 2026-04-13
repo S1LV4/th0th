@@ -20,7 +20,7 @@ import { ParseStage } from "./stages/parse.js";
 import { ResolveStage } from "./stages/resolve.js";
 import { LoadStage } from "./stages/load.js";
 import { eventBus } from "../events/event-bus.js";
-import { symbolRepository } from "../../data/sqlite/symbol-repository.js";
+import { getSymbolRepository } from "../../data/sqlite/symbol-repository-factory.js";
 import { indexJobTracker } from "../jobs/index-job-tracker.js";
 import type { EtlStageContext, EtlEvent, EtlResult, EtlStage } from "./stage-context.js";
 
@@ -62,7 +62,7 @@ export class EtlPipeline {
 
     // If force, wipe all symbol data for this project
     if (forceReindex) {
-      symbolRepository.clearProject(projectId);
+      await getSymbolRepository().clearProject(projectId);
       logger.info("EtlPipeline: cleared symbol data for full reindex", { projectId });
     }
 

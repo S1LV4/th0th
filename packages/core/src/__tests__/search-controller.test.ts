@@ -34,15 +34,38 @@ mock.module("@th0th-ai/shared", () => {
   };
 });
 
-// Mock ContextualSearchRLM since it requires full infrastructure
-mock.module("../services/search/contextual-search-rlm.js", () => ({
-  ContextualSearchRLM: class MockSearch {
-    async search() {
-      return [];
-    }
-    async ensureFreshIndex() {
-      return { wasStale: false, reindexed: false };
-    }
+// Mock ContextualSearchRLM's infrastructure dependencies so the real class
+// loads (with indexProject intact) while avoiding real DB/Ollama connections.
+// This approach avoids replacing contextual-search-rlm.js in Bun's shared
+// module registry, which would break concurrent-indexing.test.ts when both
+// files run in the same Bun process.
+// NOTE: vector-store-factory.js is intentionally NOT mocked here.
+// SearchController.getInstance() creates ContextualSearchRLM but never calls
+// ensureInitialized() during these pure-function tests, so getVectorStore()
+// is never invoked. Mocking it would contaminate vector-store-factory.test.ts
+// via Bun's shared module registry when both files run in the same process.
+mock.module("../data/sqlite/keyword-search-factory.js", () => ({
+  getKeywordSearch: mock(async () => ({})),
+}));
+mock.module("../services/search/cache-factory.js", () => ({
+  getSearchCache: mock(async () => ({})),
+}));
+mock.module("../services/search/analytics-factory.js", () => ({
+  getSearchAnalytics: mock(async () => ({})),
+}));
+mock.module("../data/sqlite/symbol-repository-factory.js", () => ({
+  getSymbolRepository: mock(async () => ({})),
+}));
+mock.module("../services/search/index-manager.js", () => ({
+  IndexManager: class MockIndexManager {},
+}));
+mock.module("../services/search/ignore-patterns.js", () => ({
+  loadProjectIgnore: mock(() => null),
+}));
+mock.module("../services/search/file-filter-cache.js", () => ({
+  FileFilterCache: class MockFileFilterCache {
+    shouldInclude() { return true; }
+    clear() {}
   },
 }));
 
@@ -84,13 +107,13 @@ describe("SearchController", () => {
       expect(preview).toContain("import");
     });
 
-    test("truncates long previews at 100 chars", () => {
+    test("truncates long previews at 150 chars", () => {
       const result = {
         content: "x".repeat(200),
         metadata: {},
       };
       const preview = controller.generatePreview(result);
-      expect(preview.length).toBeLessThanOrEqual(100);
+      expect(preview.length).toBeLessThanOrEqual(150);
       expect(preview).toEndWith("...");
     });
 

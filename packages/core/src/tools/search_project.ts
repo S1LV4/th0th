@@ -7,6 +7,7 @@
 
 import { IToolHandler, ToolResponse } from "@th0th-ai/shared";
 import { logger } from "@th0th-ai/shared";
+import { encode as toTOON } from "@toon-format/toon";
 import { SearchController } from "../controllers/search-controller.js";
 
 interface SearchProjectParams {
@@ -20,6 +21,7 @@ interface SearchProjectParams {
   include?: string[];
   exclude?: string[];
   explainScores?: boolean;
+  format?: "json" | "toon";
 }
 
 export class SearchProjectTool implements IToolHandler {
@@ -82,6 +84,12 @@ export class SearchProjectTool implements IToolHandler {
           "Include detailed score breakdown (vector, keyword, RRF components)",
         default: false,
       },
+      format: {
+        type: "string",
+        enum: ["json", "toon"],
+        description: "Output format (json or toon)",
+        default: "toon",
+      },
     },
     required: ["query", "projectId"],
   };
@@ -94,11 +102,14 @@ export class SearchProjectTool implements IToolHandler {
 
   async handle(params: unknown): Promise<ToolResponse> {
     const p = params as SearchProjectParams;
+    const format = p.format || "toon";
 
     try {
       const result = await this.controller.searchProject(p);
 
-      return { success: true, data: result };
+      return format === "toon"
+        ? { success: true, data: toTOON(result) }
+        : { success: true, data: result };
     } catch (error) {
       logger.error("Failed to search project", error as Error, {
         query: p.query,
@@ -107,7 +118,7 @@ export class SearchProjectTool implements IToolHandler {
 
       return {
         success: false,
-        error: `Failed to search project: ${(error as Error).message}`,
+        error: `Failed to search project: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
   }

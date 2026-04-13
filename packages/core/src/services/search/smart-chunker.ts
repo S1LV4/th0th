@@ -91,6 +91,11 @@ export function smartChunk(
       chunks = chunkYAML(content, cfg);
       break;
 
+    case ".py":
+      // Python uses indentation, not braces -- brace-counting would produce mega-chunks
+      chunks = chunkFixed(content, cfg);
+      break;
+
     default:
       // Code files: use semantic code chunking
       if (isCodeFile(ext)) {
@@ -116,9 +121,7 @@ export function smartChunk(
   return chunks.filter((c) => c.content.trim().length > 0);
 }
 
-// ─────────────────────────────────────────────────────────
-// Markdown Chunker
-// ─────────────────────────────────────────────────────────
+// --- Markdown Chunker ---
 
 /**
  * Split Markdown by headings.
@@ -207,9 +210,7 @@ function chunkMarkdown(content: string, cfg: ChunkerConfig): Chunk[] {
   return chunks;
 }
 
-// ─────────────────────────────────────────────────────────
-// JSON Chunker
-// ─────────────────────────────────────────────────────────
+// --- JSON Chunker ---
 
 /**
  * Split JSON by top-level keys.
@@ -283,9 +284,7 @@ function chunkJSON(content: string, cfg: ChunkerConfig): Chunk[] {
   }
 }
 
-// ─────────────────────────────────────────────────────────
-// YAML Chunker
-// ─────────────────────────────────────────────────────────
+// --- YAML Chunker ---
 
 /**
  * Split YAML by top-level keys or document separators (---).
@@ -383,9 +382,7 @@ function chunkYAML(content: string, cfg: ChunkerConfig): Chunk[] {
   return chunks.length > 0 ? chunks : chunkFixed(content, cfg);
 }
 
-// ─────────────────────────────────────────────────────────
-// Code Chunker (improved version of original)
-// ─────────────────────────────────────────────────────────
+// --- Code Chunker (improved version of original) ---
 
 /**
  * Split code by semantic blocks (functions, classes, etc.)
@@ -485,8 +482,11 @@ function chunkCode(content: string, cfg: ChunkerConfig): Chunk[] {
       braceCount +=
         (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
 
-      // End of block
-      if (braceCount <= 0 && line.trim().endsWith("}")) {
+      // End of block: brace closed OR safety valve (prevents infinite accumulation)
+      const shouldClose =
+        (braceCount <= 0 && trimmed.endsWith("}")) ||
+        currentChunk.lines.length >= cfg.maxChunkLines;
+      if (shouldClose) {
         chunks.push({
           content: currentChunk.lines.join("\n"),
           lineStart: currentChunk.startLine,
@@ -544,9 +544,7 @@ function chunkCode(content: string, cfg: ChunkerConfig): Chunk[] {
   return chunks;
 }
 
-// ─────────────────────────────────────────────────────────
-// Fixed Chunker (fallback)
-// ─────────────────────────────────────────────────────────
+// --- Fixed Chunker (fallback) ---
 
 /**
  * Simple fixed-size chunking as a last resort
@@ -571,9 +569,7 @@ function chunkFixed(content: string, cfg: ChunkerConfig): Chunk[] {
   return chunks;
 }
 
-// ─────────────────────────────────────────────────────────
-// Post-processing
-// ─────────────────────────────────────────────────────────
+// --- Post-processing ---
 
 /**
  * Post-process chunks:
@@ -664,9 +660,7 @@ function splitOversizedChunk(chunk: Chunk, cfg: ChunkerConfig): Chunk[] {
   return subChunks;
 }
 
-// ─────────────────────────────────────────────────────────
-// Utilities
-// ─────────────────────────────────────────────────────────
+// --- Utilities ---
 
 const CODE_EXTENSIONS = new Set([
   ".ts",

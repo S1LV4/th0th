@@ -13,12 +13,12 @@
 import path from "path";
 import fs from "fs/promises";
 import { logger } from "@th0th-ai/shared";
-import {
-  symbolRepository,
-  type SymbolDefinition,
-  type SymbolReference,
-  type SymbolImport,
-  type CentralityEntry,
+import { getSymbolRepository } from "../../data/sqlite/symbol-repository-factory.js";
+import type {
+  SymbolDefinition,
+  SymbolReference,
+  SymbolImport,
+  CentralityEntry,
 } from "../../data/sqlite/symbol-repository.js";
 import { computePageRank } from "./centrality.js";
 
@@ -93,8 +93,8 @@ export class SymbolGraphService {
   }
 
   /** Returns true if the project has any indexed symbols. */
-  hasData(projectId: string): boolean {
-    const files = symbolRepository.allFiles(projectId);
+  async hasData(projectId: string): Promise<boolean> {
+    const files = await getSymbolRepository().allFiles(projectId);
     return files.length > 0;
   }
 
@@ -113,15 +113,18 @@ export class SymbolGraphService {
     symbolName: string,
     fromFile?: string,
   ): Promise<DefinitionResult[]> {
-    const centrality = symbolRepository.getCentrality(projectId);
-    const defs = symbolRepository.findDefinitionsByName(projectId, symbolName);
+    const repo = getSymbolRepository();
+    const [centrality, defs] = await Promise.all([
+      repo.getCentrality(projectId),
+      repo.findDefinitionsByName(projectId, symbolName),
+    ]);
 
     if (defs.length === 0) return [];
 
     // Determine direct imports of fromFile for disambiguation
     const directImportFiles = fromFile
       ? new Set(
-          symbolRepository.findDependencies(projectId, fromFile)
+          (await repo.findDependencies(projectId, fromFile))
             .filter((imp) => imp.to_file)
             .map((imp) => imp.to_file!),
         )
@@ -162,9 +165,10 @@ export class SymbolGraphService {
     symbolName: string,
     fqn?: string,
   ): Promise<ReferenceResult[]> {
+    const repo = getSymbolRepository();
     const refs: SymbolReference[] = fqn
-      ? symbolRepository.findReferencesByFqn(projectId, fqn)
-      : symbolRepository.findReferencesByName(projectId, symbolName);
+      ? await repo.findReferencesByFqn(projectId, fqn)
+      : await repo.findReferencesByName(projectId, symbolName);
 
     const results: ReferenceResult[] = refs.map((r) => ({
       fromFile: r.from_file,
@@ -209,7 +213,7 @@ export class SymbolGraphService {
 
       if (depth >= maxDepth) continue;
 
-      const deps: SymbolImport[] = symbolRepository.findDependencies(projectId, file);
+      const deps: SymbolImport[] = await getSymbolRepository().findDependencies(projectId, file);
       for (const dep of deps) {
         edges.push({
           from: file,
@@ -233,15 +237,18 @@ export class SymbolGraphService {
     projectId: string,
     opts: ListDefinitionsOptions = {},
   ): Promise<DefinitionResult[]> {
-    const defs = symbolRepository.listDefinitions(projectId, opts);
-    const centrality = symbolRepository.getCentrality(projectId);
+    const repo = getSymbolRepository();
+    const [defs, centrality] = await Promise.all([
+      repo.listDefinitions(projectId, opts),
+      repo.getCentrality(projectId),
+    ]);
     return defs.map((def) => this.toDefinitionResult(def, centrality));
   }
 
   // ── get_top_central_files ──────────────────────────────────────────────────
 
-  getTopCentralFiles(projectId: string, limit = 20): CentralityResult[] {
-    const rows: CentralityEntry[] = symbolRepository.getTopCentralFiles(projectId, limit);
+  async getTopCentralFiles(projectId: string, limit = 20): Promise<CentralityResult[]> {
+    const rows: CentralityEntry[] = await getSymbolRepository().getTopCentralFiles(projectId, limit);
     return rows.map((row) => ({
       filePath: row.file_path,
       score: row.score,
@@ -258,13 +265,20 @@ export class SymbolGraphService {
   async recomputeCentrality(projectId: string): Promise<void> {
     const t0 = performance.now();
 
-    const nodes = symbolRepository.allFiles(projectId);
-    const edges = symbolRepository.allImportEdges(projectId);
+    const repo = getSymbolRepository();
+    const [nodes, rawEdges] = await Promise.all([
+      repo.allFiles(projectId),
+      repo.allImportEdges(projectId),
+    ]);
 
     if (nodes.length === 0) return;
 
+    const edges = rawEdges
+      .filter((e) => !!e.to_file)
+      .map((e) => ({ from_file: e.from_file, to_file: e.to_file! }));
+
     const scores = computePageRank(nodes, edges);
-    symbolRepository.updateCentrality(projectId, scores);
+    await repo.updateCentrality(projectId, scores);
 
     logger.info("SymbolGraphService: centrality recomputed", {
       projectId,

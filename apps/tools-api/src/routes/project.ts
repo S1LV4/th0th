@@ -7,7 +7,13 @@
  */
 
 import { Elysia, t } from "elysia";
-import { IndexProjectTool, GetIndexStatusTool, sqliteVectorStore } from "@th0th-ai/core";
+import {
+  IndexProjectTool,
+  GetIndexStatusTool,
+  getVectorStore,
+  workspaceManager,
+  MemoryRepository,
+} from "@th0th-ai/core";
 
 const indexProjectTool = new IndexProjectTool();
 const getIndexStatusTool = new GetIndexStatusTool();
@@ -17,7 +23,8 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
     "/list",
     async () => {
       try {
-        const projects = await sqliteVectorStore.listProjects();
+        const vectorStore = await getVectorStore();
+        const projects = await vectorStore.listProjects();
         return {
           success: true,
           data: {
@@ -73,6 +80,99 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
       },
     },
   )
+  .post(
+    "/reset",
+    async ({ body }) => {
+      const {
+        projectId,
+        clearVectors = true,
+        clearSymbols = true,
+        clearMemories = true,
+      } = body as {
+        projectId: string;
+        clearVectors?: boolean;
+        clearSymbols?: boolean;
+        clearMemories?: boolean;
+      };
+
+      const result: Record<string, number | string> = {};
+      const errors: string[] = [];
+
+      if (clearVectors) {
+        try {
+          const vectorStore = await getVectorStore();
+          result.vectorsDeleted = await vectorStore.deleteByProject(projectId);
+        } catch (e) {
+          errors.push(`vectors: ${(e as Error).message}`);
+        }
+      }
+
+      if (clearSymbols) {
+        try {
+          await workspaceManager.removeWorkspace(projectId);
+          result.symbolsCleared = 1;
+        } catch (e) {
+          // workspace may not exist — treat as success
+          result.symbolsCleared = 0;
+        }
+      }
+
+      if (clearMemories) {
+        try {
+          result.memoriesDeleted = MemoryRepository.getInstance().deleteByProject(projectId);
+        } catch (e) {
+          errors.push(`memories: ${(e as Error).message}`);
+        }
+      }
+
+      if (errors.length > 0) {
+        return {
+          success: false,
+          data: result,
+          errors,
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          projectId,
+          ...result,
+          message: `Project '${projectId}' reset complete.`,
+        },
+      };
+    },
+    {
+      body: t.Object({
+        projectId: t.String({ description: "Project ID to reset" }),
+        clearVectors: t.Optional(
+          t.Boolean({
+            default: true,
+            description: "Delete vector embeddings (semantic search index)",
+          }),
+        ),
+        clearSymbols: t.Optional(
+          t.Boolean({
+            default: true,
+            description: "Delete symbol graph (definitions, references, imports, centrality)",
+          }),
+        ),
+        clearMemories: t.Optional(
+          t.Boolean({
+            default: true,
+            description: "Delete stored memories for this project",
+          }),
+        ),
+      }),
+      detail: {
+        tags: ["project"],
+        summary: "Reset / clean a project",
+        description:
+          "Delete all indexed data for a project: vector embeddings, symbol graph, and memories. Each scope can be toggled independently. Useful before a full reindex or to free space.",
+      },
+    },
+  )
+
   .get(
     "/index/status/:jobId",
     async ({ params }) => {

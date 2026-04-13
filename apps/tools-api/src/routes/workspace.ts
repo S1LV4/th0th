@@ -233,7 +233,7 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
         }
 
         const limit = query.limit ? parseInt(query.limit as string, 10) : 20;
-        const files = symbolGraphService.getTopCentralFiles(projectId, limit);
+        const files = await symbolGraphService.getTopCentralFiles(projectId, limit);
 
         return {
           success: true,

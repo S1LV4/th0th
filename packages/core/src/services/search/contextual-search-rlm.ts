@@ -1,21 +1,21 @@
 /**
- * ContextualSearchRLM - Sistema de Busca Contextual Otimizado
+ * ContextualSearchRLM - Optimized Contextual Search Service
  *
- * Implementação inspirada em padrões de busca paralela,
- * adaptada para o ecossistema RLM com:
+ * Implementation inspired by parallel search patterns,
+ * adapted for the RLM ecosystem with:
  *
  * Features:
- * - Indexação automática de projetos com namespace por projectId
- * - Busca híbrida (vector + keyword) com RRF (Reciprocal Rank Fusion)
- * - Busca paralela em múltiplos arquivos
- * - Retorna apenas trechos relevantes com contexto
- * - Cache inteligente multi-nível
- * - Integração com embedding service existente
+ * - Automatic project indexing with per-projectId namespace
+ * - Hybrid search (vector + keyword) with RRF (Reciprocal Rank Fusion)
+ * - Parallel search across multiple files
+ * - Returns only relevant excerpts with context
+ * - Multi-level intelligent cache
+ * - Integration with existing embedding service
  *
- * Arquitetura:
- * - Usa SQLite como backend único (vector + keyword + cache)
- * - Namespace por projectId para isolamento
- * - Reutilização de embeddings entre projetos
+ * Architecture:
+ * - Uses SQLite as single backend (vector + keyword + cache)
+ * - Per-projectId namespace for isolation
+ * - Embedding reuse across projects
  */
 
 import {
@@ -25,109 +25,82 @@ import {
   VectorDocument,
 } from "@th0th-ai/shared";
 import { logger } from "@th0th-ai/shared";
-import { KeywordSearch } from "../../data/sqlite/keyword-search.js";
-import { sqliteVectorStore } from "../../data/vector/sqlite-vector-store.js";
+import { getKeywordSearch } from "../../data/sqlite/keyword-search-factory.js";
+import { getVectorStore } from "../../data/vector/vector-store-factory.js";
 import { estimateTokens } from "@th0th-ai/shared";
 import { config } from "@th0th-ai/shared";
 import { IndexManager } from "./index-manager.js";
-import { SearchCache } from "./search-cache.js";
+import { getSearchCache } from "./cache-factory.js";
+import { getSearchAnalytics } from "./analytics-factory.js";
 import { SearchAnalytics } from "./search-analytics.js";
-import { symbolRepository } from "../../data/sqlite/symbol-repository.js";
+import { SearchAnalyticsPg } from "./search-analytics-pg.js";
+import { getSymbolRepository } from "../../data/sqlite/symbol-repository-factory.js";
 import fs from "fs/promises";
 import path from "path";
 import { glob } from "glob";
-import ignoreModule from "ignore";
 import { minimatch } from "minimatch";
 import { FileFilterCache } from "./file-filter-cache.js";
 import { smartChunk } from "./smart-chunker.js";
+import { loadProjectIgnore } from "./ignore-patterns.js";
 
 const globAsync = glob;
-const ignore = (ignoreModule as any).default || ignoreModule;
 
 /**
- * ContextualSearchRLM - Serviço principal de busca contextual
+ * ContextualSearchRLM - Main contextual search service
  */
 export class ContextualSearchRLM {
-  private keywordSearch: KeywordSearch;
-  private vectorStore = sqliteVectorStore;
-  private indexManager: IndexManager;
-  private searchCache: SearchCache;
-  private analytics: SearchAnalytics;
+  private keywordSearch!: Awaited<ReturnType<typeof getKeywordSearch>>;
+  private vectorStore!: Awaited<ReturnType<typeof getVectorStore>>;
+  private indexManager!: IndexManager;
+  private searchCache!: Awaited<ReturnType<typeof getSearchCache>>;
+  private analytics!: Awaited<ReturnType<typeof getSearchAnalytics>>;
+  private symbolRepo!: Awaited<ReturnType<typeof getSymbolRepository>>;
   private fileFilterCache: FileFilterCache;
-  private readonly RRF_K = 60; // Constante para Reciprocal Rank Fusion
+  private readonly RRF_K = 60; // Constant for Reciprocal Rank Fusion
+  private initialized = false;
+
+  // Per-project mutex to prevent concurrent indexing
+  private static indexingLocks = new Map<string, Promise<void>>();
 
   constructor() {
-    this.keywordSearch = new KeywordSearch();
-    this.indexManager = new IndexManager(this.vectorStore);
-    this.searchCache = new SearchCache();
-    this.analytics = new SearchAnalytics();
     this.fileFilterCache = new FileFilterCache();
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+    
+    [
+      this.keywordSearch,
+      this.vectorStore,
+      this.searchCache,
+      this.analytics,
+      this.symbolRepo,
+    ] = await Promise.all([
+      getKeywordSearch(),
+      getVectorStore(),
+      getSearchCache(),
+      getSearchAnalytics(),
+      getSymbolRepository(),
+    ]);
+    
+    this.indexManager = new IndexManager(this.vectorStore);
+    this.initialized = true;
     logger.info("ContextualSearchRLM initialized");
   }
 
   /**
-   * Load and parse .gitignore file
+   * Load and parse .gitignore file (delegates to shared ignore-patterns module)
    */
-  private async loadGitignore(projectPath: string) {
-    const ig = ignore();
-
-    // Add default ignores (always ignore these)
-    ig.add([
-      "node_modules/**",
-      ".git/**",
-      "dist/**",
-      "build/**",
-      "coverage/**",
-      "*.db",
-      "*.db-shm",
-      "*.db-wal",
-      ".env",
-      ".env.*",
-      // Generated files (huge, low search value)
-      "**/generated/**",
-      "**/*.generated.*",
-      "**/*.d.ts",     // Type declaration files (usually auto-generated or from packages)
-      "**/*.wasm*",    // WebAssembly (binary, not searchable)
-      "**/*.min.*",    // Minified files
-      "**/*.map",      // Source maps
-      "**/lock.yaml",
-      "**/pnpm-lock.yaml",
-      "**/package-lock.json",
-      "**/bun.lockb",
-      "**/yarn.lock",
-    ]);
-
-    try {
-      const gitignorePath = path.join(projectPath, ".gitignore");
-      const gitignoreContent = await fs.readFile(gitignorePath, "utf8");
-
-      // Parse .gitignore (filter out comments and empty lines)
-      const rules = gitignoreContent
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith("#"));
-
-      ig.add(rules);
-
-      logger.info("Loaded .gitignore for project indexing", {
-        projectPath,
-        rulesCount: rules.length,
-      });
-    } catch (error) {
-      logger.debug("No .gitignore found during indexing, using defaults only", {
-        projectPath,
-      });
-    }
-
-    return ig;
+  private loadGitignore(projectPath: string) {
+    return loadProjectIgnore(projectPath);
   }
 
   /**
-   * Indexa um projeto inteiro
+   * Index an entire project
    *
-   * @param projectPath - Caminho do projeto
-   * @param projectId - ID único do projeto (namespace)
-   * @returns Estatísticas da indexação
+   * @param projectPath - Path to the project
+   * @param projectId - Unique project ID (namespace)
+   * @returns Indexing statistics
    */
   async indexProject(
     projectPath: string,
@@ -140,6 +113,53 @@ export class ContextualSearchRLM {
     chunksIndexed: number;
     errors: number;
   }> {
+    // Per-project queue mutex: serializes concurrent indexing for the same project.
+    //
+    // Pattern: each caller chains its lock after the current tail, then waits
+    // for the previous lock before proceeding. This guarantees correct ordering
+    // for any number of concurrent callers (3+), unlike a simple check-and-set.
+    //
+    //   A sets map[proj] = lock_A, awaits null  → starts immediately
+    //   B sets map[proj] = lock_B, awaits lock_A → waits for A
+    //   C sets map[proj] = lock_C, awaits lock_B → waits for B
+    //   A finishes → releases lock_A → B starts
+    //   B finishes → releases lock_B → C starts
+    //   C finishes → map[proj] === lock_C, so we clean up the entry
+    const prevLock = ContextualSearchRLM.indexingLocks.get(projectId);
+    const isQueued = prevLock !== undefined;
+
+    let releaseLock!: () => void;
+    const myLock = new Promise<void>((resolve) => { releaseLock = resolve; });
+    ContextualSearchRLM.indexingLocks.set(projectId, myLock);
+
+    if (isQueued) {
+      logger.info("Waiting for existing indexing to complete", { projectId });
+      await prevLock;
+    }
+
+    try {
+      return await this._indexProjectInternal(projectPath, projectId, options);
+    } finally {
+      // Only remove the map entry if we are still the tail (no new waiter after us)
+      if (ContextualSearchRLM.indexingLocks.get(projectId) === myLock) {
+        ContextualSearchRLM.indexingLocks.delete(projectId);
+      }
+      releaseLock();
+    }
+  }
+
+  private async _indexProjectInternal(
+    projectPath: string,
+    projectId: string,
+    options: {
+      onProgress?: (current: number, total: number) => void;
+    } = {},
+  ): Promise<{
+    filesIndexed: number;
+    chunksIndexed: number;
+    errors: number;
+  }> {
+    await this.ensureInitialized();
     logger.info("Starting project indexing", { projectPath, projectId });
 
     const securityConfig = config.get("security");
@@ -156,7 +176,7 @@ export class ContextualSearchRLM {
       // Load .gitignore rules
       const ig = await this.loadGitignore(projectPath);
 
-      // Encontra todos os arquivos relevantes
+      // Find all relevant files
       const files = await globAsync(`**/*{${allowedExtensions.join(",")}}`, {
         cwd: projectPath,
         absolute: true,
@@ -189,13 +209,13 @@ export class ContextualSearchRLM {
 
       // Load centrality map once for the whole project so each chunk
       // carries its file's PageRank score in metadata.
-      const centralityMap = symbolRepository.getCentrality(projectId);
+      const centralityMap = await this.symbolRepo.getCentrality(projectId);
 
       let filesIndexed = 0;
       let chunksIndexed = 0;
       let errors = 0;
 
-      // Processa arquivos em batches para não sobrecarregar
+      // Process files in batches to avoid overloading
       const BATCH_SIZE = 10;
       let processedFiles = 0;
       for (let i = 0; i < filteredFiles.length; i += BATCH_SIZE) {
@@ -217,7 +237,7 @@ export class ContextualSearchRLM {
           }),
         );
 
-        // Log progresso
+        // Log progress
         if (i % 50 === 0) {
           logger.info(
             `Progress: ${i}/${filteredFiles.length} files processed`,
@@ -269,7 +289,8 @@ export class ContextualSearchRLM {
     deferred?: boolean;
     filesPending?: number;
   }> {
-    const allowFullReindex = options.allowFullReindex ?? true;
+    await this.ensureInitialized();
+    const allowFullReindex = options.allowFullReindex ?? false;
     const maxSyncFiles = options.maxSyncFiles ?? 100;
 
     const staleCheck = await this.indexManager.isIndexStale(
@@ -289,10 +310,11 @@ export class ContextualSearchRLM {
       deletedFiles: staleCheck.deletedFiles?.length,
     });
 
-    // Get files that need reindexing
+    // Get files that need reindexing (pass staleCheck to avoid double filesystem scan)
     const filesToReindex = await this.indexManager.getFilesToReindex(
       projectId,
       projectPath,
+      staleCheck,
     );
 
     if (filesToReindex.length > maxSyncFiles) {
@@ -363,7 +385,7 @@ export class ContextualSearchRLM {
     });
 
     // Load centrality map so chunks carry PageRank scores
-    const centralityMap = symbolRepository.getCentrality(projectId);
+    const centralityMap = await this.symbolRepo.getCentrality(projectId);
 
     let filesIndexed = 0;
     let chunksIndexed = 0;
@@ -408,7 +430,7 @@ export class ContextualSearchRLM {
   }
 
   /**
-   * Indexa um único arquivo, dividindo em chunks semânticos
+   * Index a single file, splitting it into semantic chunks
    *
    * Uses the smart chunker which is language-aware:
    * - Markdown: splits by headings with hierarchy context
@@ -425,7 +447,7 @@ export class ContextualSearchRLM {
     const content = await fs.readFile(filePath, "utf-8");
     const relativePath = path.relative(projectRoot, filePath);
 
-    // Verifica tamanho máximo
+    // Check maximum file size
     const maxFileSize = config.get("security").maxFileSize || 1024 * 1024;
     if (content.length > maxFileSize) {
       logger.warn("File too large, skipping", {
@@ -477,7 +499,7 @@ export class ContextualSearchRLM {
   }
 
   /**
-   * Busca híbrida (vector + keyword) com filtro por projectId
+   * Hybrid search (vector + keyword) with projectId filter
    */
   async search(
     query: string,
@@ -490,6 +512,7 @@ export class ContextualSearchRLM {
       excludeFilters?: string[];
     } = {},
   ): Promise<SearchResult[]> {
+    await this.ensureInitialized();
     const maxResults = options.maxResults || 10;
     const minScore = options.minScore || 0.3;
     const explainScores = options.explainScores || false;
@@ -550,7 +573,7 @@ export class ContextualSearchRLM {
     }
 
     try {
-      // Busca paralela em vector store e keyword search
+      // Parallel search across vector store and keyword search
       const [vectorResults, keywordResults] = await Promise.all([
         this.vectorStore.search(query, maxResults * 2, projectId),
         this.keywordSearch.searchWithFilter(
@@ -565,7 +588,7 @@ export class ContextualSearchRLM {
         keywordCount: keywordResults.length,
       });
 
-      // Combina resultados usando RRF (with score explanation if requested)
+      // Combine results using RRF (with score explanation if requested)
       const fusedResults = this.fuseResults(
         [vectorResults, keywordResults],
         query,
@@ -594,12 +617,31 @@ export class ContextualSearchRLM {
         });
       }
 
-      // Filtra por score mínimo e limita
+      // Filter by minimum score and limit results.
+      //
+      // minScore is applied to the RAW vector similarity (cosine distance from
+      // the embedding model), not the normalized RRF score.  RRF normalization
+      // divides by the max score, so the top result always gets ~1.0 regardless
+      // of actual semantic relevance — making a score-based filter useless for
+      // noise rejection.  The raw vectorScore is an absolute measure (0–1) that
+      // is meaningful across queries.
+      //
+      // Keyword-only results (no vectorScore) fall back to the normalized score
+      // so they are still subject to some threshold.
       const filtered = filteredByPattern
-        .filter((result) => result.score >= minScore)
+        .filter((result) => {
+          const meta = result.metadata as Record<string, unknown>;
+          const rawVs = meta?._rrfRawVectorScore as number | undefined;
+          return rawVs !== undefined ? rawVs >= minScore : result.score >= minScore;
+        })
+        .map((result) => {
+          // Strip the internal field before caching / returning to callers.
+          const { _rrfRawVectorScore, ...cleanMeta } = result.metadata as Record<string, unknown>;
+          return { ...result, metadata: cleanMeta };
+        })
         .slice(0, maxResults);
 
-      // Adiciona contexto aos resultados
+      // Add context to results
       const withContext = await this.addContextToResults(filtered, projectId);
 
       // Cache the results
@@ -636,7 +678,7 @@ export class ContextualSearchRLM {
   }
 
   /**
-   * Reciprocal Rank Fusion (RRF) - Combina múltiplas listas de resultados
+   * Reciprocal Rank Fusion (RRF) - Combines multiple result lists
    *
    * Now includes intelligent boosting:
    * - Keywords get higher weight when query contains function/class names
@@ -691,7 +733,7 @@ export class ContextualSearchRLM {
       keywordResults: resultSets[1]?.length || 0,
     });
 
-    // Calcula RRF score para cada resultado
+    // Calculate RRF score for each result
     for (let i = 0; i < resultSets.length; i++) {
       const results = resultSets[i];
       const isVector = i === 0; // First set is vector, second is keyword
@@ -724,7 +766,7 @@ export class ContextualSearchRLM {
       });
     }
 
-    // Converte para array e ordena por RRF score
+    // Convert to array and sort by RRF score
     const sorted = Array.from(scoreMap.values())
       .sort((a, b) => b.rrfScore - a.rrfScore);
 
@@ -747,14 +789,19 @@ export class ContextualSearchRLM {
         ) => {
           const rrfNormalized = rrfScore / maxRrfScore;
 
+          // Combine RRF score with vector similarity for better relevance measurement
+          // Weight: 70% RRF (ranking-based) + 30% vector similarity (semantic)
+          const vectorSimilarity = vectorScore || 0;
+          const combinedScore = rrfNormalized * 0.7 + vectorSimilarity * 0.3;
+
           // Centrality boost: symbols with higher PageRank get a mild re-ranking bonus.
-          // finalScore = RRF_score * (1 + 0.2 * centralityScore)
+          // finalScore = combined_score * (1 + 0.2 * centralityScore)
           // centralityScore is in [0, 1]; clamped to [0, 1] after boost.
           const centralityScore =
             typeof (result.metadata as Record<string, unknown>)?.centralityScore === "number"
               ? ((result.metadata as Record<string, unknown>).centralityScore as number)
               : 0;
-          const normalizedScore = Math.min(1, rrfNormalized * (1 + 0.2 * centralityScore));
+          const normalizedScore = Math.min(1, combinedScore * (1 + 0.2 * centralityScore));
 
           // Generate explanation if requested
           const explanation = explainScores
@@ -773,6 +820,14 @@ export class ContextualSearchRLM {
             ...result,
             score: normalizedScore,
             explanation,
+            // Internal field: raw cosine similarity from the vector store.
+            // Used by search() to apply minScore as an absolute relevance gate
+            // (normalized RRF score is always ~1.0 for the top result and
+            // therefore cannot filter semantic noise). Stripped before caching.
+            metadata: {
+              ...(result.metadata as Record<string, unknown>),
+              _rrfRawVectorScore: vectorScore,
+            } as typeof result.metadata,
           };
         },
       );
@@ -821,7 +876,7 @@ export class ContextualSearchRLM {
   }
 
   /**
-   * Adiciona contexto expandido aos resultados
+   * Add expanded context to results
    */
   private async addContextToResults(
     results: SearchResult[],
@@ -854,7 +909,7 @@ export class ContextualSearchRLM {
   }
 
   /**
-   * Extrai preview do conteúdo (primeiras linhas)
+   * Extract content preview (first lines)
    */
   private extractPreview(content: string, maxLines: number = 5): string {
     const lines = content.split("\n");
@@ -863,7 +918,7 @@ export class ContextualSearchRLM {
   }
 
   /**
-   * Calcula score médio
+   * Calculate average score
    */
   private calculateAvgScore(results: SearchResult[]): number {
     if (results.length === 0) return 0;
@@ -922,14 +977,15 @@ export class ContextualSearchRLM {
   }
 
   /**
-   * Limpa indexação de um projeto
+   * Clear project index
    */
   async clearProjectIndex(projectId: string): Promise<{ deleted: number }> {
+    await this.ensureInitialized();
     try {
       const deleted = await this.vectorStore.deleteByProject(projectId);
 
-      // Também limpa keyword search
-      // Nota: KeywordSearch precisaria de método deleteByProject
+      // Also clears keyword search
+      // Note: KeywordSearch would need a deleteByProject method
 
       // Clear associated caches
       await this.searchCache.invalidateProject(projectId);
@@ -946,12 +1002,13 @@ export class ContextualSearchRLM {
   }
 
   /**
-   * Obtém estatísticas de um projeto
+   * Get project statistics
    */
   async getProjectStats(projectId: string): Promise<{
     totalDocuments: number;
     totalSize: number;
   }> {
+    await this.ensureInitialized();
     return this.vectorStore.getStats(projectId);
   }
 
@@ -965,6 +1022,7 @@ export class ContextualSearchRLM {
     projectPath: string,
     customQueries?: string[],
   ): Promise<{ queriesWarmed: number; errors: number }> {
+    await this.ensureInitialized();
     logger.info("Starting cache warmup", { projectId });
 
     // Common search patterns based on file types and structure
@@ -1021,10 +1079,10 @@ export class ContextualSearchRLM {
   /**
    * Get analytics instance for querying metrics
    */
-  getAnalytics(): SearchAnalytics {
+  getAnalytics(): SearchAnalytics | SearchAnalyticsPg {
     return this.analytics;
   }
 }
 
-// Exporta singleton
+// Export singleton
 export const contextualSearch = new ContextualSearchRLM();

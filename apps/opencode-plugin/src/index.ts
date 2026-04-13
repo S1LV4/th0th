@@ -185,15 +185,17 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
           "Semantic code search in indexed project. Uses hybrid vector + keyword search with RRF ranking. Returns relevant code snippets with file paths and line numbers.",
         args: {
           query: tool.schema.string().describe("Search query (natural language or keywords)"),
+          projectId: tool.schema.string().optional().describe("Project ID to search in (defaults to current project)"),
           maxResults: tool.schema.number().optional().default(10).describe("Max results to return"),
           minScore: tool.schema.number().optional().default(0.3).describe("Minimum relevance score (0-1)"),
           include: tool.schema.array(tool.schema.string()).optional().describe("Glob patterns to include"),
           exclude: tool.schema.array(tool.schema.string()).optional().describe("Glob patterns to exclude"),
+          format: tool.schema.enum(["json", "toon"]).optional().default("toon").describe("Output format"),
         },
         async execute(args, ctx: ToolContext) {
           const result = await th0thFetch("/api/v1/search/project", {
             query: args.query,
-            projectId,
+            projectId: args.projectId || projectId,
             projectPath: ctx.worktree || projectPath,
             maxResults: args.maxResults ?? 10,
             minScore: args.minScore ?? 0.3,
@@ -201,6 +203,7 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
             autoReindex: true,
             include: args.include,
             exclude: args.exclude,
+            format: args.format ?? "toon",
           })
           return JSON.stringify(result)
         },
@@ -208,10 +211,10 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
 
       "th0th_remember": tool({
         description:
-          "Store important information in th0th memory. Persists across sessions. Use for: user preferences, architectural decisions, discovered patterns.",
+          "Store important information in th0th memory. Persists across sessions. Use for: user criticals, architectural decisions, discovered patterns.",
         args: {
           content: tool.schema.string().describe("Content to store"),
-          type: tool.schema.enum(["preference", "conversation", "code", "decision", "pattern"]).describe("Memory type"),
+          type: tool.schema.enum(["critical", "conversation", "code", "decision", "pattern"]).describe("Memory type"),
           tags: tool.schema.array(tool.schema.string()).optional().describe("Tags for categorization"),
           importance: tool.schema.number().min(0).max(1).optional().default(0.5).describe("Importance 0-1"),
         },
@@ -235,7 +238,7 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
           "Search stored memories from previous sessions. Recovers decisions, patterns, and context.",
         args: {
           query: tool.schema.string().describe("What to remember"),
-          types: tool.schema.array(tool.schema.enum(["preference", "conversation", "code", "decision", "pattern"])).optional().describe("Filter by type"),
+          types: tool.schema.array(tool.schema.enum(["critical", "conversation", "code", "decision", "pattern"])).optional().describe("Filter by type"),
           limit: tool.schema.number().optional().default(10).describe("Max results"),
           minImportance: tool.schema.number().optional().default(0.3).describe("Minimum importance"),
         },
@@ -309,6 +312,40 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
             projectPath: ctx.worktree || projectPath,
             maxTokens: args.maxTokens ?? 4000,
             maxResults: args.maxResults ?? 5,
+          }, 10_000)
+          return JSON.stringify(result)
+        },
+      }),
+
+      "th0th_read": tool({
+        description:
+          "Read file with automatic compression, caching, and symbol metadata. Use with th0th_search results for 60% token savings.",
+        args: {
+          filePath: tool.schema.string().describe("File path (absolute or relative to project root)"),
+          projectId: tool.schema.string().optional().describe("Project ID for symbol metadata"),
+          offset: tool.schema.number().optional().describe("Start line number (1-indexed)"),
+          limit: tool.schema.number().optional().describe("Number of lines to read"),
+          lineStart: tool.schema.number().optional().describe("Start line (alternative to offset)"),
+          lineEnd: tool.schema.number().optional().describe("End line (alternative to limit)"),
+          compress: tool.schema.boolean().optional().default(true).describe("Auto-compress content > 100 lines"),
+          targetRatio: tool.schema.number().min(0).max(1).optional().default(0.3).describe("Compression target ratio (0.3 = 70% reduction)"),
+          format: tool.schema.enum(["json", "toon"]).optional().default("json").describe("Output format"),
+          includeSymbols: tool.schema.boolean().optional().default(true).describe("Include symbol metadata from graph"),
+          includeImports: tool.schema.boolean().optional().default(true).describe("Extract and show import statements"),
+        },
+        async execute(args, ctx: ToolContext) {
+          const result = await th0thFetch("/api/v1/file/read", {
+            filePath: args.filePath,
+            projectId: args.projectId || projectId,
+            offset: args.offset,
+            limit: args.limit,
+            lineStart: args.lineStart,
+            lineEnd: args.lineEnd,
+            compress: args.compress ?? true,
+            targetRatio: args.targetRatio ?? 0.3,
+            format: args.format ?? "json",
+            includeSymbols: args.includeSymbols ?? true,
+            includeImports: args.includeImports ?? true,
           }, 10_000)
           return JSON.stringify(result)
         },
@@ -391,7 +428,7 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
         },
         async execute(args, ctx: ToolContext) {
           const result = await th0thGetWithQuery("/api/v1/symbol/definitions", {
-            projectId: ctx.worktree ? projectId : projectId,
+            projectId,
             search: args.query,
             kind: args.kind?.join(","),
             file: args.file,
@@ -507,22 +544,22 @@ export const Th0thPlugin: Plugin = async ({ project, directory, worktree, client
       if (!apiAvailable) return
 
       try {
-        const memories = await th0thFetch<{ results?: Array<{ content: string }> }>(
+        const memories = await th0thFetch<{ success: boolean; data?: { memories?: Array<{ content: string }> } }>(
           "/api/v1/memory/search",
           {
-            query: `project ${projectId} preferences decisions patterns`,
+            query: `project ${projectId} critical decisions patterns`,
             projectId,
             sessionId: input.sessionID,
             limit: 5,
             minImportance: 0.5,
             includePersistent: true,
-            format: "toon",
+            format: "json",
           },
           3_000,
         )
 
-        if (memories?.results?.length) {
-          const memoryText = memories.results
+        if (memories?.data?.memories?.length) {
+          const memoryText = memories.data.memories
             .map((m, i) => `${i + 1}. ${m.content}`)
             .join("\n")
           output.context.push(`## th0th - Persistent Memories\n${memoryText}`)

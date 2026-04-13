@@ -10,12 +10,12 @@
  */
 
 import { logger } from "@th0th-ai/shared";
-import { sqliteVectorStore } from "../../../data/vector/sqlite-vector-store.js";
-import {
-  symbolRepository,
-  type SymbolDefinition,
-  type SymbolReference,
-  type SymbolImport,
+import { getVectorStore } from "../../../data/vector/vector-store-factory.js";
+import { getSymbolRepository } from "../../../data/sqlite/symbol-repository-factory.js";
+import type {
+  SymbolDefinition,
+  SymbolReference,
+  SymbolImport,
 } from "../../../data/sqlite/symbol-repository.js";
 import type {
   EtlStageContext,
@@ -31,6 +31,15 @@ export interface LoadResult {
 }
 
 export class LoadStage {
+  private vectorStore: Awaited<ReturnType<typeof getVectorStore>> | null = null;
+
+  private async ensureVectorStore() {
+    if (!this.vectorStore) {
+      this.vectorStore = await getVectorStore();
+    }
+    return this.vectorStore;
+  }
+
   async run(ctx: EtlStageContext, files: ResolvedFile[]): Promise<LoadResult> {
     const t0 = performance.now();
 
@@ -63,7 +72,7 @@ export class LoadStage {
             ]);
 
             // Update fingerprint table
-            symbolRepository.upsertFile({
+            await getSymbolRepository().upsertFile({
               project_id: ctx.projectId,
               relative_path: file.file.relativePath,
               content_hash: file.file.contentHash,
@@ -141,6 +150,8 @@ export class LoadStage {
   /** Insert semantic chunks into the vector store. Returns chunk count. */
   private async loadToVectorStore(ctx: EtlStageContext, file: ResolvedFile): Promise<number> {
     if (file.chunks.length === 0) return 0;
+    
+    const vs = await this.ensureVectorStore();
 
     const documents = file.chunks.map((chunk, i) => ({
       id: `${ctx.projectId}:${file.file.relativePath}:${i}`,
@@ -158,7 +169,7 @@ export class LoadStage {
       },
     }));
 
-    await sqliteVectorStore.addDocuments(documents);
+    await vs.addDocuments(documents);
     return documents.length;
   }
 
@@ -207,7 +218,7 @@ export class LoadStage {
     }));
 
     // Single transaction: delete old + insert new
-    symbolRepository.writeFileSymbols(ctx.projectId, filePath, defs, refs, imports);
+    await getSymbolRepository().writeFileSymbols(ctx.projectId, filePath, defs, refs, imports);
 
     return defs.length;
   }

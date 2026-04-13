@@ -108,3 +108,6 @@ export type {
 // Workspace Manager
 export { workspaceManager, WorkspaceManager } from "./workspace/workspace-manager.js";
 export type { WorkspaceRow, WorkspaceStatus } from "./workspace/workspace-manager.js";
+
+// Prisma lifecycle
+export { getPrismaClient, disconnectPrisma } from "./query/prisma-client.js";

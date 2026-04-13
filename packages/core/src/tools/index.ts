@@ -20,3 +20,6 @@ export { ListProjectsTool } from "./list_projects.js";
 export { SearchDefinitionsTool } from "./search_definitions.js";
 export { GetReferencesTool } from "./get_references.js";
 export { GoToDefinitionTool } from "./go_to_definition.js";
+
+// File tools
+export { ReadFileTool } from "./read_file.js";

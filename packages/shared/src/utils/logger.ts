@@ -85,28 +85,33 @@ export class Logger implements ILogger {
   }
 
   /**
-   * Write to stderr (for MCP compatibility)
+   * Write log message to appropriate stream
+   * INFO/DEBUG -> stdout (white text)
+   * WARN/ERROR -> stderr (red text)
    */
-  private write(message: string): void {
-    // MCP servers use stderr for logs to avoid polluting stdout
-    console.error(message);
+  private write(message: string, level: LogLevel): void {
+    if (level >= LogLevel.WARN) {
+      console.error(message);
+    } else {
+      console.log(message);
+    }
   }
 
   debug(message: string, meta?: Record<string, unknown>): void {
     if (this.shouldLog(LogLevel.DEBUG)) {
-      this.write(this.formatMessage('DEBUG', message, meta));
+      this.write(this.formatMessage('DEBUG', message, meta), LogLevel.DEBUG);
     }
   }
 
   info(message: string, meta?: Record<string, unknown>): void {
     if (this.shouldLog(LogLevel.INFO)) {
-      this.write(this.formatMessage('INFO', message, meta));
+      this.write(this.formatMessage('INFO', message, meta), LogLevel.INFO);
     }
   }
 
   warn(message: string, meta?: Record<string, unknown>): void {
     if (this.shouldLog(LogLevel.WARN)) {
-      this.write(this.formatMessage('WARN', message, meta));
+      this.write(this.formatMessage('WARN', message, meta), LogLevel.WARN);
     }
   }
 
@@ -120,7 +125,7 @@ export class Logger implements ILogger {
           stack: error.stack
         }
       } : meta;
-      this.write(this.formatMessage('ERROR', message, errorMeta));
+      this.write(this.formatMessage('ERROR', message, errorMeta), LogLevel.ERROR);
     }
   }
 

@@ -9,11 +9,8 @@
  */
 
 import { logger } from "@th0th-ai/shared";
-import {
-  symbolRepository,
-  type WorkspaceRow,
-  type WorkspaceStatus,
-} from "../../data/sqlite/symbol-repository.js";
+import { getSymbolRepository } from "../../data/sqlite/symbol-repository-factory.js";
+import type { WorkspaceRow, WorkspaceStatus } from "../../data/sqlite/symbol-repository.js";
 import { eventBus } from "../events/event-bus.js";
 import { symbolGraphService } from "../symbol/symbol-graph.service.js";
 
@@ -40,8 +37,9 @@ export class WorkspaceManager {
    * Creates the row if it doesn't exist yet.
    */
   async markIndexing(projectId: string, projectPath: string): Promise<void> {
-    const existing = symbolRepository.getWorkspace(projectId);
-    symbolRepository.upsertWorkspace({
+    const repo = getSymbolRepository();
+    const existing = await repo.getWorkspace(projectId);
+    await repo.upsertWorkspace({
       project_id: projectId,
       project_path: projectPath,
       display_name: projectPath.split("/").pop(),
@@ -64,7 +62,7 @@ export class WorkspaceManager {
     projectId: string,
     stats: { filesCount: number; chunksCount: number; symbolsCount: number },
   ): Promise<void> {
-    symbolRepository.updateWorkspaceStatus(projectId, "indexed", {
+    await getSymbolRepository().updateWorkspaceStatus(projectId, "indexed", {
       lastIndexedAt: Date.now(),
       lastError: null,
       filesCount: stats.filesCount,
@@ -93,7 +91,7 @@ export class WorkspaceManager {
    * Called on ETL failure.
    */
   async markError(projectId: string, error: string): Promise<void> {
-    symbolRepository.updateWorkspaceStatus(projectId, "error", {
+    await getSymbolRepository().updateWorkspaceStatus(projectId, "error", {
       lastError: error,
     });
 
@@ -104,22 +102,21 @@ export class WorkspaceManager {
   // ── Queries ────────────────────────────────────────────────────────────────
 
   async listWorkspaces(statusFilter?: WorkspaceStatus | "all"): Promise<WorkspaceRow[]> {
-    const all = symbolRepository.listWorkspaces();
+    const all = await getSymbolRepository().listWorkspaces();
     if (!statusFilter || statusFilter === "all") return all;
     return all.filter((w) => w.status === statusFilter);
   }
 
   async getWorkspace(projectId: string): Promise<WorkspaceRow | null> {
-    return symbolRepository.getWorkspace(projectId);
+    return getSymbolRepository().getWorkspace(projectId);
   }
 
   /**
-   * Remove a project: deletes workspace row + all symbol data.
+   * Remove a project: deletes workspace row + all symbol data (CASCADE).
    * Does NOT clear the vector store — caller is responsible for that.
    */
   async removeWorkspace(projectId: string): Promise<void> {
-    symbolRepository.clearProject(projectId);
-    symbolRepository.deleteWorkspace(projectId);
+    await getSymbolRepository().clearProject(projectId);
     logger.info("WorkspaceManager: workspace removed", { projectId });
   }
 

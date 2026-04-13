@@ -120,7 +120,7 @@ export class ContextController {
     let graphContextSection = "";
     let graphBoostFiles: string[] = [];
 
-    if (projectId && symbolGraphService.hasData(projectId) && looksLikeSymbol(query)) {
+    if (projectId && await symbolGraphService.hasData(projectId) && looksLikeSymbol(query)) {
       try {
         const [defs, refs] = await Promise.all([
           symbolGraphService.goToDefinition(projectId, query),

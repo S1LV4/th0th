@@ -20,6 +20,8 @@ import { mistral } from "@ai-sdk/mistral";
 import { ollama } from "ollama-ai-provider";
 import type { EmbeddingProviderConfig } from "./config.js";
 import { metrics } from "../monitoring/metrics.js";
+import { EmbeddingRateLimiter } from "./rate-limiter.js";
+import { logger } from "@th0th-ai/shared";
 
 /**
  * Base interface for embedding providers
@@ -89,10 +91,9 @@ async function withRetry<T>(
 
       if (attempt < config.maxRetries) {
         const delay = getRetryDelay(attempt, config);
-        console.warn(
-          `[EmbeddingProvider] ${context} failed (attempt ${attempt + 1}/${config.maxRetries + 1}), ` +
-            `retrying in ${delay}ms:`,
-          lastError.message,
+        logger.warn(
+          `[EmbeddingProvider] ${context} failed (attempt ${attempt + 1}/${config.maxRetries + 1}), retrying in ${delay}ms`,
+          { error: lastError.message },
         );
         await sleep(delay);
       }
@@ -112,13 +113,18 @@ async function withTimeout<T>(
   timeoutMs: number,
   context: string,
 ): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       reject(new Error(`${context} timeout after ${timeoutMs}ms`));
     }, timeoutMs);
   });
 
-  return Promise.race([fn(), timeoutPromise]);
+  try {
+    return await Promise.race([fn(), timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId!);
+  }
 }
 
 /**
@@ -142,9 +148,10 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
   private readonly baseURL?: string;
   private readonly timeout: number;
   private readonly retryConfig: RetryConfig;
+  private readonly rateLimiter?: EmbeddingRateLimiter;
   
-  // Ollama rate limiting: Queue to prevent overwhelming the server
-  private static ollamaQueue: Promise<any> = Promise.resolve();
+  // Ollama rate limiting: Mutex to prevent overwhelming the server
+  private static ollamaMutex: Promise<void> = Promise.resolve();
   private static readonly OLLAMA_DELAY_MS = 50; // 50ms between requests
 
   constructor(
@@ -154,7 +161,7 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
     this.id = providerId;
     this.model = config.model;
     this.dimensions = config.dimensions || 768; // Default to common dimension
-    this.providerType = config.provider;
+    this.providerType = config.provider as "openai" | "google" | "cohere" | "ollama" | "mistral";
     this.apiKey = config.apiKey;
     this.baseURL = config.baseURL;
     this.timeout = config.timeout || 60000; // Default 60s
@@ -164,6 +171,16 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
       baseDelay: 500,
       maxDelay: 8000,
     };
+
+    // Initialize rate limiter if configured
+    if (config.rateLimits) {
+      this.rateLimiter = new EmbeddingRateLimiter(providerId, {
+        requestsPerMinute: config.rateLimits.requestsPerMinute,
+        tokensPerMinute: config.rateLimits.tokensPerMinute,
+        requestsPerDay: config.rateLimits.requestsPerDay,
+      });
+      logger.info(`[${providerId}] Rate limiter initialized`, config.rateLimits);
+    }
   }
 
   /**
@@ -227,10 +244,11 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
     
     // Truncate and add marker
     const truncated = text.substring(0, MAX_CHARS);
-    console.warn(
-      `[${this.id}] Text truncated from ${text.length} to ${MAX_CHARS} chars to fit context`
+    logger.warn(
+      `[${this.id}] Text truncated to fit context`,
+      { originalLength: text.length, maxChars: MAX_CHARS },
     );
-    
+
     return truncated;
   }
 
@@ -270,21 +288,19 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
    * Queue Ollama requests to prevent overwhelming the server
    */
   private async queueOllamaRequest<T>(fn: () => Promise<T>): Promise<T> {
-    // Chain this request after the previous one
-    const prevQueue = AISDKEmbeddingProvider.ollamaQueue;
-    
-    // Create new promise that waits for previous + delay
-    const currentPromise = prevQueue
-      .then(() => sleep(AISDKEmbeddingProvider.OLLAMA_DELAY_MS))
-      .then(fn)
-      .catch((err) => {
-        throw err; // Re-throw to maintain error handling
-      });
-    
-    // Update queue
-    AISDKEmbeddingProvider.ollamaQueue = currentPromise.catch(() => {}); // Prevent unhandled rejection
-    
-    return currentPromise;
+    let release: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const prev = AISDKEmbeddingProvider.ollamaMutex;
+    AISDKEmbeddingProvider.ollamaMutex = gate;
+
+    await prev;
+    await sleep(AISDKEmbeddingProvider.OLLAMA_DELAY_MS);
+
+    try {
+      return await fn();
+    } finally {
+      release!();
+    }
   }
 
   /**
@@ -384,16 +400,75 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
   }
 
   /**
-   * Embed multiple texts in batch
+   * Embed multiple texts in batch with intelligent rate limiting
    *
-   * Note: AI SDK's embedMany handles batching internally
-   * Ollama: Uses sequential calls (no native batch API)
+   * Features:
+   * - Rate limiting for RPM/TPM/RPD
+   * - Sub-batching to respect provider limits
+   * - Sequential processing with delays between batches
+   * - Progress logging for large batches
    */
   async embedBatch(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) {
       return [];
     }
 
+    // Get batch size from config or use default
+    const batchSize = this.config.rateLimits?.batchSize || texts.length;
+    const batchDelay = this.config.rateLimits?.batchDelayMs || 0;
+
+    // If no rate limiting configured or batch fits in single request, use original logic
+    if (!this.rateLimiter || texts.length <= batchSize) {
+      return this.embedBatchDirect(texts);
+    }
+
+    // Process in sub-batches with rate limiting
+    logger.info(`[${this.id}] Processing ${texts.length} texts in batches of ${batchSize}`, {
+      totalBatches: Math.ceil(texts.length / batchSize),
+      batchDelayMs: batchDelay,
+    });
+
+    const allEmbeddings: number[][] = [];
+
+    for (let i = 0; i < texts.length; i += batchSize) {
+      const batch = texts.slice(i, i + batchSize);
+      const batchNum = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(texts.length / batchSize);
+
+      // Estimate tokens for this batch
+      const estimatedTokens = batch.reduce((sum, text) => sum + Math.ceil(text.length / 4), 0);
+
+      // Wait for rate limit capacity
+      await this.rateLimiter.waitForCapacity(estimatedTokens);
+
+      // Process batch
+      logger.debug(`[${this.id}] Processing batch ${batchNum}/${totalBatches} (${batch.length} texts)`);
+      const batchEmbeddings = await this.embedBatchDirect(batch);
+      allEmbeddings.push(...batchEmbeddings);
+
+      // Record request for rate limiting
+      this.rateLimiter.recordRequest(estimatedTokens);
+
+      // Delay between batches (if configured and not last batch)
+      if (batchDelay > 0 && i + batchSize < texts.length) {
+        logger.debug(`[${this.id}] Waiting ${batchDelay}ms before next batch`);
+        await sleep(batchDelay);
+      }
+    }
+
+    logger.info(`[${this.id}] Completed batch processing`, {
+      totalTexts: texts.length,
+      totalBatches: Math.ceil(texts.length / batchSize),
+      rateLimitStatus: this.rateLimiter.getStatus(),
+    });
+
+    return allEmbeddings;
+  }
+
+  /**
+   * Direct batch embedding without rate limiting (used internally)
+   */
+  private async embedBatchDirect(texts: string[]): Promise<number[][]> {
     // Ollama: Prefer native batch endpoint (/api/embed with input array)
     if (this.providerType === "ollama") {
       try {
@@ -447,19 +522,31 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
                 return output;
               },
               this.retryConfig,
-              `[${this.id}] embedBatch (${texts.length} texts)`,
+              `[${this.id}] embedBatchDirect (${texts.length} texts)`,
             ),
           this.timeout,
-          `[${this.id}] embedBatch`,
+          `[${this.id}] embedBatchDirect`,
         );
       } catch (error) {
-        console.warn(
+        logger.warn(
           `[${this.id}] Ollama batch endpoint unavailable, falling back to sequential embeds: ${(error as Error).message}`,
         );
         const embeddings: number[][] = [];
+        let consecutiveFailures = 0;
         for (const text of texts) {
-          const embedding = await this.embedQuery(text);
-          embeddings.push(embedding);
+          try {
+            const embedding = await this.embedQuery(text);
+            embeddings.push(embedding);
+            consecutiveFailures = 0;
+          } catch (singleErr) {
+            consecutiveFailures++;
+            if (consecutiveFailures >= 3) {
+              throw new Error(
+                `[${this.id}] Ollama batch fallback aborted after 3 consecutive failures: ${(singleErr as Error).message}`,
+              );
+            }
+            embeddings.push(new Array(this.dimensions).fill(0));
+          }
         }
         return embeddings;
       }
@@ -481,17 +568,20 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
             return embeddings.map((e) => Array.from(e));
           },
           this.retryConfig,
-          `[${this.id}] embedBatch (${texts.length} texts)`,
+          `[${this.id}] embedBatchDirect (${texts.length} texts)`,
         ),
       this.timeout,
-      `[${this.id}] embedBatch`,
+      `[${this.id}] embedBatchDirect`,
     );
   }
 
   /**
    * Check if provider is available and configured correctly
    *
-   * Performs a test embedding to validate:
+   * For Ollama: performs a fast 2s connectivity check first to avoid
+   * long timeouts when the service is offline (issue #15).
+   *
+   * Then validates with a test embedding:
    * - API key is valid
    * - Model is accessible
    * - Network connectivity
@@ -499,29 +589,57 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
    */
   async isAvailable(): Promise<boolean> {
     try {
-      // Test with a simple query
+      // Ollama: fast connectivity pre-check (2s timeout) to avoid
+      // blocking for minutes when service is offline
+      if (this.providerType === "ollama") {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2000);
+          const response = await fetch(`${this.baseURL}/api/tags`, {
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          if (!response.ok) {
+            logger.error(
+              `[${this.id}] Ollama API returned ${response.status}`,
+            );
+            return false;
+          }
+        } catch {
+          logger.error(
+            `[${this.id}] Ollama service unreachable`,
+            undefined,
+            { baseURL: this.baseURL, timeoutMs: 2000 },
+          );
+          return false;
+        }
+      }
+
+      // Test with a simple query (reduced timeout for local providers)
       const testText = "test";
       const embedding = await this.embedQuery(testText);
 
       // Validate embedding format
       if (!Array.isArray(embedding) || embedding.length !== this.dimensions) {
-        console.error(
-          `[${this.id}] Invalid embedding dimensions: expected ${this.dimensions}, got ${embedding.length}`,
+        logger.error(
+          `[${this.id}] Invalid embedding dimensions`,
+          undefined,
+          { expected: this.dimensions, got: embedding.length },
         );
         return false;
       }
 
       // Validate embedding values (should be numbers)
       if (!embedding.every((v) => typeof v === "number" && !isNaN(v))) {
-        console.error(`[${this.id}] Invalid embedding values (not numbers)`);
+        logger.error(`[${this.id}] Invalid embedding values (not numbers)`);
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error(
-        `[${this.id}] Provider unavailable:`,
-        (error as Error).message,
+      logger.error(
+        `[${this.id}] Provider unavailable`,
+        error as Error,
       );
       return false;
     }
@@ -532,6 +650,16 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
    */
   getConfig(): EmbeddingProviderConfig {
     return this.config;
+  }
+
+  /**
+   * Get rate limiter status (if configured)
+   */
+  getRateLimitStatus() {
+    if (!this.rateLimiter) {
+      return null;
+    }
+    return this.rateLimiter.getStatus();
   }
 }
 
