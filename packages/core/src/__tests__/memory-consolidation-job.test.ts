@@ -17,8 +17,13 @@ import { describe, test, expect, beforeAll, afterAll, beforeEach } from "bun:tes
 import { getPrismaClient, disconnectPrisma } from "../services/query/prisma-client.js";
 import { MemoryConsolidationJob } from "../services/jobs/memory-consolidation-job.js";
 
-const prisma = getPrismaClient();
+// Skip DB tests when PostgreSQL is not configured (CI without database service)
+const DB_AVAILABLE = (process.env.DATABASE_URL ?? "").startsWith("postgres");
+
 const TEST_PREFIX = "cjtest_";
+
+// Lazy reference — assigned in beforeAll when DB_AVAILABLE is true
+let prisma: any;
 
 // ── Raw-SQL helpers (ORM filter methods don't work under bun test + PrismaPg) ─
 
@@ -109,7 +114,9 @@ function callPrune(job: MemoryConsolidationJob, now: Date, day: number) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-beforeAll(cleanup);
+describe.skipIf(!DB_AVAILABLE)("MemoryConsolidationJob — PostgreSQL integration", () => {
+
+beforeAll(async () => { prisma = getPrismaClient(); await cleanup(); });
 afterAll(async () => { await cleanup(); await disconnectPrisma(); });
 beforeEach(cleanup);
 
@@ -310,6 +317,8 @@ describe("pruneOldLowSignalMemories — raw SQL (N+1 fix applied)", () => {
     expect(await exists(id)).toBe(true);
   });
 });
+
+}); // describe.skipIf(!DB_AVAILABLE)
 
 // ─────────────────────────────────────────────────────────────────────────────
 
