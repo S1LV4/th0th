@@ -7,13 +7,14 @@
 import { SearchAnalytics } from "./search-analytics.js";
 import { SearchAnalyticsPg } from "./search-analytics-pg.js";
 import { logger } from "@th0th-ai/shared";
+import { getDbConfig } from "../../data/db-connection.js";
 
 let cachedAnalytics: SearchAnalytics | SearchAnalyticsPg | null = null;
 
 export function getSearchAnalytics(): SearchAnalytics | SearchAnalyticsPg {
   if (cachedAnalytics) return cachedAnalytics;
-  
-  const dbType = process.env.DATABASE_URL?.startsWith('postgresql') ? 'postgres' : 'sqlite';
+
+  const dbType = getDbConfig().type;
   
   if (dbType === 'postgres') {
     cachedAnalytics = new SearchAnalyticsPg();

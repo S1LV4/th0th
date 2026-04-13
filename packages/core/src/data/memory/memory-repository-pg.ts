@@ -248,6 +248,16 @@ export class MemoryRepositoryPg {
   }
 
   /**
+   * Delete all memories for a project. Returns the count deleted.
+   */
+  async deleteByProject(projectId: string): Promise<number> {
+    const result = await this.prisma.$executeRaw`
+      DELETE FROM memories WHERE project_id = ${projectId}
+    `;
+    return result;
+  }
+
+  /**
    * List memories with pagination.
    */
   async list(limit: number, offset: number): Promise<MemoryRow[]> {

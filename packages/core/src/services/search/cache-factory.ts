@@ -7,13 +7,14 @@
 import { SearchCache } from './search-cache.js';
 import { SearchCachePg } from './search-cache-pg.js';
 import { logger } from '@th0th-ai/shared';
+import { getDbConfig } from '../../data/db-connection.js';
 
 let cachedCache: SearchCache | SearchCachePg | null = null;
 
 export function getSearchCache(): SearchCache | SearchCachePg {
   if (cachedCache) return cachedCache;
-  
-  const dbType = process.env.DATABASE_URL?.startsWith('postgresql') ? 'postgres' : 'sqlite';
+
+  const dbType = getDbConfig().type;
   
   if (dbType === 'postgres') {
     cachedCache = new SearchCachePg();

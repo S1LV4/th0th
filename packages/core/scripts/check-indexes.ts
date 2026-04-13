@@ -1,4 +1,4 @@
-import { getPrismaClient } from './src/services/query/prisma-client.js';
+import { getPrismaClient } from '../src/services/query/prisma-client.js';
 
 const prisma = getPrismaClient();
 

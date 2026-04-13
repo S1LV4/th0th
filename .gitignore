@@ -54,3 +54,6 @@ temp/
 chroma/
 chromadb/
 .git-corrupted/
+
+# Local MCP configuration (contains developer-specific paths)
+.mcp.json

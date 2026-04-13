@@ -71,10 +71,9 @@ export class EmbeddingCachePg {
    * Deserialize embedding from bytes
    */
   private deserializeEmbedding(bytes: Uint8Array): number[] {
-    const buffer = bytes.buffer;
-    const view = new DataView(buffer);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const embedding: number[] = [];
-    for (let i = 0; i < bytes.length; i += 4) {
+    for (let i = 0; i < bytes.byteLength; i += 4) {
       embedding.push(view.getFloat32(i, true)); // true = little endian
     }
     return embedding;
@@ -86,16 +85,16 @@ export class EmbeddingCachePg {
   async get(text: string): Promise<number[] | null> {
     const contentHash = this.hashContent(text);
 
-    const entry = await prisma.embeddingCache.findUnique({
-      where: { textHash: contentHash },
+    const entry = await prisma.embeddingCache.findFirst({
+      where: { textHash: contentHash, model: this.model },
     });
 
-    if (entry && entry.model === this.model) {
+    if (entry) {
       this.hits++;
-      
-      // Update access stats
-      await prisma.embeddingCache.update({
-        where: { textHash: contentHash },
+
+      // Update access stats for this (hash, model) pair only
+      await prisma.embeddingCache.updateMany({
+        where: { textHash: contentHash, model: this.model },
         data: {
           accessedAt: new Date(),
           hitCount: { increment: 1 },
@@ -116,20 +115,26 @@ export class EmbeddingCachePg {
     const contentHash = this.hashContent(text);
     const embeddingBytes = this.serializeEmbedding(embedding) as any;
 
-    await prisma.embeddingCache.upsert({
-      where: { textHash: contentHash },
-      create: {
-        textHash: contentHash,
-        embedding: embeddingBytes,
-        model: this.model,
-        hitCount: 1,
-      },
-      update: {
-        embedding: embeddingBytes as any,
-        model: this.model,
-        accessedAt: new Date(),
-      },
+    const existing = await prisma.embeddingCache.findFirst({
+      where: { textHash: contentHash, model: this.model },
+      select: { textHash: true },
     });
+
+    if (existing) {
+      await prisma.embeddingCache.updateMany({
+        where: { textHash: contentHash, model: this.model },
+        data: { embedding: embeddingBytes, accessedAt: new Date() },
+      });
+    } else {
+      await prisma.embeddingCache.create({
+        data: {
+          textHash: contentHash,
+          embedding: embeddingBytes,
+          model: this.model,
+          hitCount: 1,
+        },
+      });
+    }
   }
 
   /**
@@ -156,49 +161,33 @@ export class EmbeddingCachePg {
    * Batch store embeddings
    */
   async setBatch(items: Array<{ text: string; embedding: number[] }>): Promise<void> {
-    await prisma.$transaction(
-      items.map(item => {
-        const contentHash = this.hashContent(item.text);
-        const embeddingBytes = this.serializeEmbedding(item.embedding) as any;
-
-        return prisma.embeddingCache.upsert({
-          where: { textHash: contentHash },
-          create: {
-            textHash: contentHash,
-            embedding: embeddingBytes,
-            model: this.model,
-            hitCount: 1,
-          },
-          update: {
-            embedding: embeddingBytes as any,
-            model: this.model,
-            accessedAt: new Date(),
-          },
-        });
-      })
-    );
+    for (const item of items) {
+      await this.set(item.text, item.embedding);
+    }
   }
 
   /**
    * Get cache statistics
    */
   async getStats(): Promise<EmbeddingCacheStats> {
-    const totalEntries = await prisma.embeddingCache.count({
-      where: { model: this.model },
-    });
+    const [stats] = await prisma.$queryRaw<
+      Array<{ total_entries: bigint; total_size: bigint }>
+    >`
+      SELECT
+        COUNT(*)                                    AS total_entries,
+        COALESCE(SUM(octet_length(embedding)), 0)   AS total_size
+      FROM "EmbeddingCache"
+      WHERE model = ${this.model}
+    `;
 
-    const entries = await prisma.embeddingCache.findMany({
-      where: { model: this.model },
-      select: { embedding: true },
-    });
-
-    const totalSize = entries.reduce((sum, e) => sum + e.embedding.length, 0);
+    const totalEntries = Number(stats?.total_entries ?? 0);
+    const totalSize = Number(stats?.total_size ?? 0);
 
     return {
       totalEntries,
       cacheSize: totalSize,
       hitRate: this.hits + this.misses > 0 ? this.hits / (this.hits + this.misses) : 0,
-      avgDimensions: totalEntries > 0 ? totalSize / totalEntries / 4 : 0, // 4 bytes per float
+      avgDimensions: totalEntries > 0 ? totalSize / totalEntries / 4 : 0, // 4 bytes per float32
     };
   }
 

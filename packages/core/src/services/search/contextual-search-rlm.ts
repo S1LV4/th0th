@@ -33,7 +33,7 @@ import { IndexManager } from "./index-manager.js";
 import { getSearchCache } from "./cache-factory.js";
 import { getSearchAnalytics } from "./analytics-factory.js";
 import { SearchAnalytics } from "./search-analytics.js";
-import { SearchAnalyticsPg } from "./search-analytics-pg.js";
+import type { SearchAnalyticsPg } from "./search-analytics-pg.js";
 import { getSymbolRepository } from "../../data/sqlite/symbol-repository-factory.js";
 import fs from "fs/promises";
 import path from "path";

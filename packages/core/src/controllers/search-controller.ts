@@ -89,7 +89,7 @@ export class SearchController {
       projectId,
       projectPath,
       maxResults = 10,
-      minScore = 0.3,  // Voltando para 0.3 pois o novo algoritmo gera scores mais distribuídos
+      minScore = 0.3,  // Reverted to 0.3: new algorithm produces more distributed scores
       responseMode = "summary",
       autoReindex = false,
       include,

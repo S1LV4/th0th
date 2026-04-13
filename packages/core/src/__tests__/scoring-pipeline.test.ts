@@ -50,19 +50,6 @@ mock.module("../../data/sqlite/symbol-repository.js", () => ({
   },
 }));
 
-// ── Mock ContextualSearchRLM for SearchController tests ─────
-mock.module("../services/search/contextual-search-rlm.js", () => ({
-  ContextualSearchRLM: class MockSearch {
-    async search(_q: string, _pid: string, opts: any) {
-      // Returns whatever mockSearchResults is set to
-      return (globalThis as any).__mockSearchResults ?? [];
-    }
-    async ensureFreshIndex() {
-      return { wasStale: false, reindexed: false };
-    }
-  },
-}));
-
 import { SearchController } from "../controllers/search-controller.js";
 
 // ── Helpers ──────────────────────────────────────────────────

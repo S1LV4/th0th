@@ -12,7 +12,7 @@ import {
   GetIndexStatusTool,
   getVectorStore,
   workspaceManager,
-  MemoryRepository,
+  getMemoryRepository,
 } from "@th0th-ai/core";
 
 const indexProjectTool = new IndexProjectTool();
@@ -119,7 +119,7 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
 
       if (clearMemories) {
         try {
-          result.memoriesDeleted = MemoryRepository.getInstance().deleteByProject(projectId);
+          result.memoriesDeleted = await getMemoryRepository().deleteByProject(projectId);
         } catch (e) {
           errors.push(`memories: ${(e as Error).message}`);
         }

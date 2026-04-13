@@ -122,7 +122,9 @@ export class KeywordSearchPg {
       .filter(t => t.length > 2)
       .map(t => `${t}:*`)
       .join(' | ');
-    
+
+    if (!searchTerms) return [];
+
     const queryText = projectId
       ? `SELECT id, content, metadata,
            ts_rank_cd(content_tsvector, to_tsquery('english', $1)) as rank
@@ -169,7 +171,9 @@ export class KeywordSearchPg {
       .filter(t => t.length > 2)
       .map(t => `${t}:*`)
       .join(' | ');
-    
+
+    if (!searchTerms) return [];
+
     const whereClauses: string[] = ["content_tsvector @@ to_tsquery('english', $1)"];
     const params: any[] = [searchTerms];
     let paramIndex = 2;

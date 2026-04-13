@@ -45,16 +45,16 @@ mock.module("@th0th-ai/shared", () => {
 // is never invoked. Mocking it would contaminate vector-store-factory.test.ts
 // via Bun's shared module registry when both files run in the same process.
 mock.module("../data/sqlite/keyword-search-factory.js", () => ({
-  getKeywordSearch: mock(async () => ({})),
+  getKeywordSearch: mock(() => ({})),
 }));
 mock.module("../services/search/cache-factory.js", () => ({
-  getSearchCache: mock(async () => ({})),
+  getSearchCache: mock(() => ({})),
 }));
 mock.module("../services/search/analytics-factory.js", () => ({
-  getSearchAnalytics: mock(async () => ({})),
+  getSearchAnalytics: mock(() => ({})),
 }));
 mock.module("../data/sqlite/symbol-repository-factory.js", () => ({
-  getSymbolRepository: mock(async () => ({})),
+  getSymbolRepository: mock(() => ({})),
 }));
 mock.module("../services/search/index-manager.js", () => ({
   IndexManager: class MockIndexManager {},

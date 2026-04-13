@@ -9,6 +9,7 @@ import path from "path";
 import { logger } from "@th0th-ai/shared";
 
 let prismaInstance: PrismaClient | null = null;
+let prismaPool: import('pg').Pool | null = null;
 
 export function getPrismaClient(): PrismaClient {
   if (!prismaInstance) {
@@ -34,7 +35,7 @@ export function getPrismaClient(): PrismaClient {
           connectionTimeoutMillis: 5000,
         });
         pool.on('error', (err) => {
-          logger.error('Unexpected PG pool error', err);
+          logger.error('Unexpected PG pool error', err as Error);
         });
         PrismaPg = adapterPg.PrismaPg;
       } catch (e) {
@@ -42,6 +43,7 @@ export function getPrismaClient(): PrismaClient {
         prismaInstance = new PrismaClient();
         return prismaInstance;
       }
+      prismaPool = pool;
       const adapter = new PrismaPg(pool as any);
       prismaInstance = new PrismaClient({ adapter });
       logger.info('Prisma Client initialized with PostgreSQL (pg adapter)');
@@ -76,5 +78,9 @@ export async function disconnectPrisma() {
   if (prismaInstance) {
     await prismaInstance.$disconnect();
     prismaInstance = null;
+  }
+  if (prismaPool) {
+    await prismaPool.end();
+    prismaPool = null;
   }
 }

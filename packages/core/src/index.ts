@@ -22,6 +22,7 @@ export * from "./services/index.js";
 
 // Data
 export { MemoryRepository } from "./data/memory/memory-repository.js";
+export { getMemoryRepository } from "./data/memory/memory-repository-factory.js";
 export type {
   MemoryRow,
   InsertMemoryInput,
