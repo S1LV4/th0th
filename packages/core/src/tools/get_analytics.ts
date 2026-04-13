@@ -6,7 +6,7 @@
 
 import { IToolHandler } from "@th0th-ai/shared";
 import { ToolResponse } from "@th0th-ai/shared";
-import { ContextualSearchRLM } from "../services/search/contextual-search-rlm.js";
+import { getSearchAnalytics } from "../services/search/analytics-factory.js";
 import { logger } from "@th0th-ai/shared";
 
 interface GetAnalyticsParams {
@@ -46,17 +46,13 @@ export class GetAnalyticsTool implements IToolHandler {
     required: ["type"],
   };
 
-  private contextualSearch: ContextualSearchRLM;
-
-  constructor() {
-    this.contextualSearch = new ContextualSearchRLM();
-  }
+  constructor() {}
 
   async handle(params: unknown): Promise<ToolResponse> {
     const { type, projectId, query, limit = 10 } = params as GetAnalyticsParams;
 
     try {
-      const analytics = this.contextualSearch.getAnalytics();
+      const analytics = getSearchAnalytics();
 
       logger.info("Getting analytics", { type, projectId, query });
 
@@ -64,7 +60,7 @@ export class GetAnalyticsTool implements IToolHandler {
 
       switch (type) {
         case "summary":
-          data = analytics.getSummary(limit);
+          data = await analytics.getSummary(limit);
           break;
 
         case "project":
@@ -74,7 +70,7 @@ export class GetAnalyticsTool implements IToolHandler {
               error: "projectId is required for type='project'",
             };
           }
-          data = analytics.getProjectStats(projectId, limit);
+          data = await analytics.getProjectStats(projectId, limit);
           if (!data) {
             return {
               success: false,
@@ -90,7 +86,7 @@ export class GetAnalyticsTool implements IToolHandler {
               error: "query is required for type='query'",
             };
           }
-          data = analytics.getQueryStats(query, projectId);
+          data = await analytics.getQueryStats(query, projectId);
           if (!data) {
             return {
               success: false,
@@ -100,13 +96,14 @@ export class GetAnalyticsTool implements IToolHandler {
           break;
 
         case "cache":
-          data = analytics.getCachePerformance(projectId);
+          data = await analytics.getCachePerformance(projectId);
           break;
 
-        case "recent":
+        case "recent": {
           const recentLimit = limit || 50;
-          data = analytics.getRecentSearches(recentLimit, projectId);
+          data = await analytics.getRecentSearches(recentLimit, projectId);
           break;
+        }
 
         default:
           return {

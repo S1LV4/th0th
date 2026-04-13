@@ -289,7 +289,7 @@ describe("RelationExtractor.classifyRelation", () => {
     const existing = makeMemory({
       id: "old11",
       content: "User prefers dark mode",
-      type: "preference",
+      type: "critical",
       similarity: 0.3,
     });
 

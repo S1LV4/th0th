@@ -90,8 +90,8 @@ describe("MemoryService", () => {
       expect(level).toBe(MemoryLevel.PROJECT);
     });
 
-    test("optimizer + preference = USER (L2)", () => {
-      const level = service.determineLevel(MemoryType.PREFERENCE, {
+    test("optimizer + critical = USER (L2)", () => {
+      const level = service.determineLevel(MemoryType.CRITICAL, {
         agentId: "optimizer",
       });
       expect(level).toBe(MemoryLevel.USER);
@@ -120,7 +120,7 @@ describe("MemoryService", () => {
     });
 
     test("type-based defaults", () => {
-      expect(service.determineLevel(MemoryType.PREFERENCE, {})).toBe(
+      expect(service.determineLevel(MemoryType.CRITICAL, {})).toBe(
         MemoryLevel.USER,
       );
       expect(service.determineLevel(MemoryType.CONVERSATION, {})).toBe(

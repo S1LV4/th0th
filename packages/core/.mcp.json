@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "th0th": {
+      "type": "stdio",
+      "command": "/home/joaovs/.bun/bin/bun",
+      "args": [
+        "run",
+        "/home/joaovs/projetos/th0th/apps/mcp-client/src/index.ts"
+      ],
+      "env": {}
+    }
+  }
+}

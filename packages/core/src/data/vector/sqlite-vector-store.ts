@@ -12,7 +12,7 @@
  */
 
 import { Database } from 'bun:sqlite';
-import { IVectorStore, IVectorCollection, VectorDocument } from '@th0th-ai/shared';
+import { IVectorStore, IVectorCollection, VectorDocument, VectorStoreStats, ProjectInfo } from '@th0th-ai/shared';
 import { SearchResult, SearchSource } from '@th0th-ai/shared';
 import { config } from '@th0th-ai/shared';
 import { logger } from '@th0th-ai/shared';
@@ -234,6 +234,10 @@ export class SQLiteVectorStore implements IVectorStore {
 
   /**
    * Search for similar documents with projectId filter
+   * 
+   * NOTE: SQLite implementation performs O(n) similarity search in-memory.
+   * For large datasets (>10k documents), consider using PostgreSQL with pgvector.
+   * Set SQLITE_VECTOR_PREFILTER=true to enable optional pre-filtering (reduces quality).
    */
   async search(
     query: string, 
@@ -241,55 +245,183 @@ export class SQLiteVectorStore implements IVectorStore {
     projectId?: string
   ): Promise<SearchResult[]> {
     try {
-      // Generate query embedding
-      const queryEmbedding = await this.embeddingService.embed(query);
+      // Check document count and warn if large dataset
+      const stats = await this.getStats(projectId);
       
-      // Get all documents for the project (or all if no project specified)
-      let docs: Array<{
-        id: string;
-        content: string;
-        metadata: string;
-        embedding: Buffer;
-      }>;
-
-      if (projectId) {
-        const stmt = this.db.prepare(`
-          SELECT id, content, metadata, embedding 
-          FROM vector_documents 
-          WHERE project_id = ?
-        `);
-        docs = stmt.all(projectId) as any;
-      } else {
-        const stmt = this.db.prepare(`
-          SELECT id, content, metadata, embedding 
-          FROM vector_documents
-        `);
-        docs = stmt.all() as any;
+      if (stats.totalDocuments > 10000) {
+        logger.warn('SQLite vector search is O(n) and may be slow for large datasets.', {
+          documents: stats.totalDocuments,
+          projectId,
+          recommendation: 'Consider PostgreSQL with pgvector for better performance (set VECTOR_STORE_TYPE=postgres)'
+        });
+      }
+      
+      // Auto-enable prefilter for large datasets to prevent OOM
+      if (process.env.SQLITE_VECTOR_PREFILTER === 'true' || stats.totalDocuments > 5000) {
+        return this.searchWithPrefilter(query, limit, projectId);
       }
 
-      // Calculate cosine similarity for each document
-      const results = docs.map(doc => {
-        const embedding = new Float32Array(doc.embedding.buffer, doc.embedding.byteOffset, doc.embedding.length / 4);
-        const similarity = this.cosineSimilarity(queryEmbedding, Array.from(embedding));
-        
-        return {
-          id: doc.id,
-          content: doc.content,
-          score: similarity,
-          source: SearchSource.VECTOR,
-          metadata: JSON.parse(doc.metadata)
-        };
-      });
-
-      // Sort by similarity and limit
-      return results
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
+      // Default: Full O(n) search for smaller datasets
+      return this.searchFull(query, limit, projectId);
 
     } catch (error) {
       logger.error('Vector search failed', error as Error, { query, projectId });
       return [];
     }
+  }
+
+  /**
+   * Full O(n) vector search - calculates similarity for all documents
+   * This is the default, honest approach that guarantees semantic search quality.
+   */
+  private async searchFull(
+    query: string,
+    limit: number,
+    projectId?: string
+  ): Promise<SearchResult[]> {
+    // Generate query embedding
+    const queryEmbedding = await this.embeddingService.embed(query);
+
+    // Phase 1: Load only id + embedding for similarity ranking (avoid loading content/metadata)
+    let rows: Array<{ id: string; embedding: Buffer }>;
+
+    if (projectId) {
+      const stmt = this.db.prepare(`
+        SELECT id, embedding
+        FROM vector_documents
+        WHERE project_id = ?
+      `);
+      rows = stmt.all(projectId) as any;
+    } else {
+      const stmt = this.db.prepare(`
+        SELECT id, embedding
+        FROM vector_documents
+      `);
+      rows = stmt.all() as any;
+    }
+
+    // Calculate cosine similarity and pick top-N
+    const scored = rows.map(row => {
+      const embedding = new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.length / 4);
+      return {
+        id: row.id,
+        score: this.cosineSimilarity(queryEmbedding, Array.from(embedding)),
+      };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    const topIds = scored.slice(0, limit);
+
+    if (topIds.length === 0) return [];
+
+    // Phase 2: Fetch full content/metadata only for top-N results
+    const placeholders = topIds.map(() => '?').join(',');
+    const fullStmt = this.db.prepare(`
+      SELECT id, content, metadata
+      FROM vector_documents
+      WHERE id IN (${placeholders})
+    `);
+    const fullDocs = fullStmt.all(...topIds.map(r => r.id)) as Array<{
+      id: string; content: string; metadata: string;
+    }>;
+
+    const docMap = new Map(fullDocs.map(d => [d.id, d]));
+
+    return topIds.map(r => {
+      const doc = docMap.get(r.id)!;
+      return {
+        id: r.id,
+        content: doc.content,
+        score: r.score,
+        source: SearchSource.VECTOR,
+        metadata: JSON.parse(doc.metadata),
+      };
+    });
+  }
+
+  /**
+   * Pre-filtered search - limits dataset before similarity calculation
+   * 
+   * WARNING: This is a trade-off approach that reduces search quality.
+   * Pre-filtering by recency can hide semantically relevant older documents.
+   * Only use this if you accept the quality trade-off for performance.
+   * 
+   * Enabled via: SQLITE_VECTOR_PREFILTER=true
+   */
+  private async searchWithPrefilter(
+    query: string,
+    limit: number,
+    projectId?: string
+  ): Promise<SearchResult[]> {
+    // Generate query embedding
+    const queryEmbedding = await this.embeddingService.embed(query);
+
+    // Pre-filter: select most recent 5000 document ids + embeddings only.
+    // Content and metadata are fetched in a second query for the top-N winners,
+    // matching the same 2-phase strategy used in searchFull.
+    const prefilterLimit = 5000;
+
+    let rows: Array<{ id: string; embedding: Buffer }>;
+
+    if (projectId) {
+      const stmt = this.db.prepare(`
+        SELECT id, embedding
+        FROM vector_documents
+        WHERE project_id = ?
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `);
+      rows = stmt.all(projectId, prefilterLimit) as any;
+    } else {
+      const stmt = this.db.prepare(`
+        SELECT id, embedding
+        FROM vector_documents
+        ORDER BY updated_at DESC
+        LIMIT ?
+      `);
+      rows = stmt.all(prefilterLimit) as any;
+    }
+
+    logger.debug('Pre-filtered vector search', {
+      totalDocs: rows.length,
+      prefilterLimit,
+      projectId,
+      warning: 'Quality may be reduced - older relevant documents excluded',
+    });
+
+    // Phase 1: score all rows, pick top-N
+    const scored = rows.map(row => {
+      const emb = new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.length / 4);
+      return { id: row.id, score: this.cosineSimilarity(queryEmbedding, Array.from(emb)) };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const topIds = scored.slice(0, limit);
+
+    if (topIds.length === 0) return [];
+
+    // Phase 2: fetch content + metadata only for top-N
+    const placeholders = topIds.map(() => '?').join(',');
+    const fullStmt = this.db.prepare(`
+      SELECT id, content, metadata
+      FROM vector_documents
+      WHERE id IN (${placeholders})
+    `);
+    const fullDocs = fullStmt.all(...topIds.map(r => r.id)) as Array<{
+      id: string; content: string; metadata: string;
+    }>;
+
+    const docMap = new Map(fullDocs.map(d => [d.id, d]));
+
+    return topIds.map(r => {
+      const doc = docMap.get(r.id)!;
+      return {
+        id: r.id,
+        content: doc.content,
+        score: r.score,
+        source: SearchSource.VECTOR,
+        metadata: JSON.parse(doc.metadata),
+      };
+    });
   }
 
   /**
@@ -353,13 +485,7 @@ export class SQLiteVectorStore implements IVectorStore {
   /**
    * List all indexed projects with stats
    */
-  async listProjects(): Promise<Array<{
-    projectId: string;
-    projectPath: string | null;
-    documentCount: number;
-    totalSize: number;
-    lastIndexed: string | null;
-  }>> {
+  async listProjects(): Promise<ProjectInfo[]> {
     try {
       const rows = this.db.prepare(`
         SELECT 
@@ -416,6 +542,9 @@ export class SQLiteVectorStore implements IVectorStore {
   async getStats(projectId?: string): Promise<{
     totalDocuments: number;
     totalSize: number;
+    embeddingDimensions?: number;
+    indexType?: string;
+    indexStatus?: 'building' | 'ready' | 'stale' | 'none';
   }> {
     try {
       let result: { count: number; size: number };
@@ -441,12 +570,19 @@ export class SQLiteVectorStore implements IVectorStore {
 
       return {
         totalDocuments: result?.count || 0,
-        totalSize: result?.size || 0
+        totalSize: result?.size || 0,
+        indexType: 'none',
+        indexStatus: 'none'
       };
 
     } catch (error) {
       logger.error('Failed to get vector store stats', error as Error);
-      return { totalDocuments: 0, totalSize: 0 };
+      return { 
+        totalDocuments: 0, 
+        totalSize: 0,
+        indexType: 'none',
+        indexStatus: 'none'
+      };
     }
   }
 
@@ -464,7 +600,100 @@ export class SQLiteVectorStore implements IVectorStore {
       normB += b[i] * b[i];
     }
     
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+    return denominator === 0 ? 0 : dotProduct / denominator;
+  }
+
+  /**
+   * Search by pre-computed embedding vector
+   */
+  async searchByEmbedding(
+    embedding: number[],
+    limit: number = 10,
+    projectId?: string
+  ): Promise<SearchResult[]> {
+    try {
+      // Phase 1: Load only id + embedding for similarity ranking
+      let rows: Array<{ id: string; embedding: Buffer }>;
+
+      if (projectId) {
+        const stmt = this.db.prepare(`
+          SELECT id, embedding
+          FROM vector_documents
+          WHERE project_id = ?
+        `);
+        rows = stmt.all(projectId) as any;
+      } else {
+        const stmt = this.db.prepare(`
+          SELECT id, embedding
+          FROM vector_documents
+        `);
+        rows = stmt.all() as any;
+      }
+
+      if (rows.length > 5000) {
+        logger.warn('searchByEmbedding scanning large dataset', {
+          documents: rows.length,
+          projectId,
+        });
+      }
+
+      // Calculate cosine similarity and pick top-N
+      const scored = rows.map(row => {
+        const docEmbedding = new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.length / 4);
+        return {
+          id: row.id,
+          score: this.cosineSimilarity(embedding, Array.from(docEmbedding)),
+        };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+      const topIds = scored.slice(0, limit);
+
+      if (topIds.length === 0) return [];
+
+      // Phase 2: Fetch full content/metadata only for top-N results
+      const placeholders = topIds.map(() => '?').join(',');
+      const fullStmt = this.db.prepare(`
+        SELECT id, content, metadata
+        FROM vector_documents
+        WHERE id IN (${placeholders})
+      `);
+      const fullDocs = fullStmt.all(...topIds.map(r => r.id)) as Array<{
+        id: string; content: string; metadata: string;
+      }>;
+
+      const docMap = new Map(fullDocs.map(d => [d.id, d]));
+
+      return topIds.map(r => {
+        const doc = docMap.get(r.id)!;
+        return {
+          id: r.id,
+          content: doc.content,
+          score: r.score,
+          source: SearchSource.VECTOR,
+          metadata: JSON.parse(doc.metadata),
+        };
+      });
+
+    } catch (error) {
+      logger.error('Vector search by embedding failed', error as Error, { projectId });
+      return [];
+    }
+  }
+
+  /**
+   * Health check - verifies database connection
+   */
+  async healthCheck(): Promise<boolean> {
+    try {
+      const stmt = this.db.prepare('SELECT 1');
+      stmt.get();
+      return true;
+    } catch (error) {
+      logger.error('Health check failed', error as Error);
+      return false;
+    }
   }
 
   /**
@@ -563,6 +792,15 @@ class SQLiteVectorCollection implements IVectorCollection {
   async add(documents: VectorDocument[]): Promise<void> {
     if (!documents.length) return;
 
+    // Batch embed all documents that don't have pre-computed embeddings
+    const needsEmbedding = documents.filter(d => !d.embedding);
+    if (needsEmbedding.length > 0) {
+      const embeddings = await this.embeddingService.embedBatch(
+        needsEmbedding.map(d => d.content),
+      );
+      needsEmbedding.forEach((d, i) => { d.embedding = embeddings[i]; });
+    }
+
     const insertStmt = this.db.prepare(`
       INSERT OR REPLACE INTO vector_documents
       (id, project_id, content, metadata, embedding, created_at, updated_at)
@@ -572,14 +810,12 @@ class SQLiteVectorCollection implements IVectorCollection {
     const now = Date.now();
 
     for (const doc of documents) {
-      const embedding = doc.embedding || (await this.embeddingService.embed(doc.content));
-
       insertStmt.run(
         doc.id,
         this.name,
         doc.content,
         JSON.stringify(doc.metadata || {}),
-        Buffer.from(new Float32Array(embedding).buffer),
+        Buffer.from(new Float32Array(doc.embedding!).buffer),
         now,
         now,
       );
@@ -598,25 +834,3 @@ class SQLiteVectorCollection implements IVectorCollection {
   }
 }
 
-/**
- * Simple embedding service wrapper
- * Uses the existing embedding infrastructure
- */
-class EmbeddingService {
-  private vectorStoreEmbeddingService: ChromaEmbeddingService;
-
-  constructor() {
-    this.vectorStoreEmbeddingService = new ChromaEmbeddingService();
-  }
-
-  async embed(text: string): Promise<number[]> {
-    return this.vectorStoreEmbeddingService.embed(text);
-  }
-
-  async embedBatch(texts: string[]): Promise<number[][]> {
-    return this.vectorStoreEmbeddingService.embedBatch(texts);
-  }
-}
-
-// Export singleton instance
-export const sqliteVectorStore = new SQLiteVectorStore();

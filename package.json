@@ -9,10 +9,15 @@
     "apps/*"
   ],
   "scripts": {
+    "predev": "bun scripts/diagnose.ts && bash scripts/ensure-ollama.sh",
+    "predev:api": "bun scripts/diagnose.ts",
+    "predev:mcp": "bun scripts/diagnose.ts",
+    "predev:ui": "bun scripts/diagnose.ts",
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "dev:api": "bun run --filter @th0th-ai/tools-api dev",
+    "dev:api": "turbo run dev --filter @th0th-ai/tools-api...",
     "dev:mcp": "bun run --filter @th0th-ai/mcp-client dev",
+    "dev:ui": "bun run --filter @th0th-ai/ui-client dev",
     "start:api": "bun run --filter @th0th-ai/tools-api start",
     "start:mcp": "bun run --filter @th0th-ai/mcp-client start",
     "type-check": "turbo run type-check",
@@ -21,6 +26,7 @@
     "bench:beir": "bun run --filter @th0th-ai/core bench:beir",
     "lint": "turbo run lint",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist",
+    "diagnose": "bun scripts/diagnose.ts",
     "version:sync": "bun scripts/version-sync.ts"
   },
   "keywords": [
@@ -39,11 +45,15 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@types/pg": "^8.18.0",
     "turbo": "^2.5.0",
     "typescript": "^5.4.0"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "packageManager": "bun@1.2.0"
+  "packageManager": "bun@1.2.0",
+  "optionalDependencies": {
+    "pg": "^8.20.0"
+  }
 }

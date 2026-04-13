@@ -17,7 +17,7 @@
 export enum MemoryLevel {
   PERSISTENT = 0,  // Files, git history
   PROJECT = 1,     // Indexed code, ASTs
-  USER = 2,        // User preferences, patterns
+  USER = 2,        // User critical, patterns
   SESSION = 3,     // Current conversation
   WORKING = 4      // Active tokens in LLM
 }
@@ -26,7 +26,7 @@ export enum MemoryLevel {
  * Memory Types
  */
 export enum MemoryType {
-  PREFERENCE = 'preference',
+  CRITICAL = 'critical',
   CONVERSATION = 'conversation',
   CODE = 'code',
   DECISION = 'decision',

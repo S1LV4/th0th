@@ -14,3 +14,12 @@ export { SearchMemoriesTool } from "./search_memories.js";
 export { CreateCheckpointTool } from "./create_checkpoint.js";
 export { RestoreCheckpointTool } from "./restore_checkpoint.js";
 export { ListCheckpointsTool } from "./list_checkpoints.js";
+
+// Symbol Graph tools
+export { ListProjectsTool } from "./list_projects.js";
+export { SearchDefinitionsTool } from "./search_definitions.js";
+export { GetReferencesTool } from "./get_references.js";
+export { GoToDefinitionTool } from "./go_to_definition.js";
+
+// File tools
+export { ReadFileTool } from "./read_file.js";

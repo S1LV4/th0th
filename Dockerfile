@@ -30,9 +30,11 @@ COPY apps/opencode-plugin/package.json apps/opencode-plugin/
 # Install dependencies (ignore Prisma postinstall that checks Node version)
 RUN bun install --ignore-scripts
 
-# Copy source code
+# Copy source code (exclude ui-client - not needed for API/MCP)
 COPY packages ./packages
-COPY apps ./apps
+COPY apps/tools-api ./apps/tools-api
+COPY apps/mcp-client ./apps/mcp-client
+COPY apps/opencode-plugin ./apps/opencode-plugin
 
 # Generate Prisma client
 RUN cd packages/core && bunx prisma generate
@@ -47,7 +49,15 @@ RUN apk add --no-cache nodejs-current curl
 
 WORKDIR /app
 
-COPY --from=base /app ./
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/packages ./packages
+COPY --from=base /app/apps/tools-api ./apps/tools-api
+COPY --from=base /app/package.json ./package.json
+COPY --from=base /app/bunfig.toml ./bunfig.toml
+
+# Entrypoint: runs Prisma migrations before starting the API
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Data directory for SQLite databases
 RUN mkdir -p /data
@@ -56,14 +66,15 @@ ENV NODE_ENV=production
 ENV TH0TH_API_PORT=3333
 # Default: Ollama on host network
 ENV OLLAMA_BASE_URL=http://host.docker.internal:11434
-ENV OLLAMA_EMBEDDING_MODEL=nomic-embed-text:latest
-ENV OLLAMA_EMBEDDING_DIMENSIONS=768
+ENV OLLAMA_EMBEDDING_MODEL=bge-m3
+ENV OLLAMA_EMBEDDING_DIMENSIONS=1024
 
 EXPOSE 3333
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
   CMD curl -sf http://localhost:3333/health || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["bun", "./apps/tools-api/src/index.ts"]
 
 # ---- MCP Target ----

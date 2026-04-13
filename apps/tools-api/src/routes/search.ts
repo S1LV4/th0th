@@ -40,7 +40,7 @@ export const searchRoutes = new Elysia({ prefix: "/api/v1/search" })
             default: "summary",
           }),
         ),
-        autoReindex: t.Optional(t.Boolean({ default: true })),
+        autoReindex: t.Optional(t.Boolean({ default: false })),
         include: t.Optional(
           t.Array(t.String(), { description: "Glob patterns to include" }),
         ),
@@ -48,6 +48,12 @@ export const searchRoutes = new Elysia({ prefix: "/api/v1/search" })
           t.Array(t.String(), { description: "Glob patterns to exclude" }),
         ),
         explainScores: t.Optional(t.Boolean({ default: false })),
+        format: t.Optional(
+          t.Union([t.Literal("json"), t.Literal("toon")], {
+            default: "toon",
+            description: "Output format (json or toon)",
+          }),
+        ),
       }),
       detail: {
         tags: ["search"],
