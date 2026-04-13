@@ -78,7 +78,7 @@ async function testCrudOperations() {
     logger.info("\n🎉 All CRUD operations passed! PostgreSQL is fully functional.");
     
   } catch (error) {
-    logger.error("❌ CRUD test failed:", error);
+    logger.error("❌ CRUD test failed:", error as Error);
     throw error;
   } finally {
     await disconnectPrisma();

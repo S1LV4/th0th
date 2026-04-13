@@ -86,7 +86,7 @@ async function testMemoryOperations() {
     logger.info("\n🎉 All memory tests passed! PostgreSQL integration is working correctly.");
     
   } catch (error) {
-    logger.error("❌ Memory test failed:", error);
+    logger.error("❌ Memory test failed:", error as Error);
     throw error;
   } finally {
     await disconnectPrisma();

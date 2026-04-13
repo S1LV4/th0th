@@ -157,7 +157,7 @@ Testado e validado em: ${new Date().toISOString()}
     console.log("Você pode recuperá-la posteriormente com o ID:", memoryId);
     
   } catch (error) {
-    logger.error("❌ Failed to create progress memory:", error);
+    logger.error("❌ Failed to create progress memory:", error as Error);
     throw error;
   } finally {
     await disconnectPrisma();

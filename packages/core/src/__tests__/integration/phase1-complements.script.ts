@@ -120,7 +120,7 @@ async function testPhase1Complements() {
     logger.info('- ✓ Array containment queries functional');
 
   } catch (error) {
-    logger.error('Phase 1 Complement test failed:', error);
+    logger.error('Phase 1 Complement test failed:', error as Error);
     throw error;
   } finally {
     await prisma.$disconnect();

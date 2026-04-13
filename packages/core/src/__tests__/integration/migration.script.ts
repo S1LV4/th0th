@@ -111,7 +111,7 @@ async function testMigration() {
     logger.info('- ✓ Array containment queries working');
 
   } catch (error) {
-    logger.error('Migration test failed:', error);
+    logger.error('Migration test failed:', error as Error);
     throw error;
   } finally {
     await prisma.$disconnect();

@@ -38,7 +38,7 @@ async function testConnection() {
     logger.info("✅ All tests passed! PostgreSQL connection is working.");
     
   } catch (error) {
-    logger.error("❌ Connection test failed:", error);
+    logger.error("❌ Connection test failed:", error as Error);
     throw error;
   } finally {
     await disconnectPrisma();

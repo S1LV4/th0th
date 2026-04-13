@@ -79,7 +79,7 @@ async function testMemoryStorage() {
     logger.info("\n🎉 All PostgreSQL storage tests passed!");
     
   } catch (error) {
-    logger.error("❌ Test failed:", error);
+    logger.error("❌ Test failed:", error as Error);
     throw error;
   } finally {
     await disconnectPrisma();

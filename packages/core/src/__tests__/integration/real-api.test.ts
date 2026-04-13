@@ -18,6 +18,11 @@ import path from "path";
 
 const API = process.env.TH0TH_API_URL ?? "http://localhost:3333";
 const PROJECT_ID = "th0th-self-test";
+
+// Skip the entire suite when the API server isn't reachable
+const API_AVAILABLE = await fetch(`${API}/health`, { signal: AbortSignal.timeout(2000) })
+  .then((r) => r.ok)
+  .catch(() => false);
 const PROJECT_PATH = path.resolve(__dirname, "../../../../..");  // project root
 
 // ── HTTP helpers ─────────────────────────────────────────────────────────────
@@ -51,7 +56,7 @@ async function pollUntil(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("th0th API — real integration (using th0th codebase as fixture)", () => {
+describe.skipIf(!API_AVAILABLE)("th0th API — real integration (using th0th codebase as fixture)", () => {
 
   // ── Health ─────────────────────────────────────────────────────────────────
   describe("health", () => {
