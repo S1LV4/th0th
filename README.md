@@ -1,4 +1,4 @@
-<img src="https://i.imgur.com/5EJK9OF.png" alt="th0th" style="visibility: visible; max-width: 60%; display: block; margin: 0 auto;" />
+<img src="https://i.imgur.com/WP7ivBc.png" alt="th0th" style="visibility: visible; max-width: 60%; display: block; margin: 0 auto;" />
 
 # th0th
 
