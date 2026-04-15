@@ -63,8 +63,8 @@ GITHUB_RAW="https://raw.githubusercontent.com/${GITHUB_REPO}"
 GITHUB_URL="https://github.com/${GITHUB_REPO}"
 # Docker Hub org is the lowercase GitHub owner (Docker requires lowercase).
 _DOCKER_ORG=$(echo "${GITHUB_REPO%%/*}" | tr '[:upper:]' '[:lower:]')
-DOCKER_API_IMAGE="${_DOCKER_ORG}/th0th-ai:api-latest"
-DOCKER_MCP_IMAGE="${_DOCKER_ORG}/th0th-ai:mcp-latest"
+DOCKER_API_IMAGE="${_DOCKER_ORG}/th0th:api-latest"
+DOCKER_MCP_IMAGE="${_DOCKER_ORG}/th0th:mcp-latest"
 
 # ── Config (overridable via env) ──────────────────────────────
 MODE="${TH0TH_MODE:-}"
