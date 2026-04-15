@@ -2,8 +2,8 @@
 # ============================================
 # th0th - Ollama WSL Setup
 # ============================================
-# Detects the Windows host IP from /etc/resolv.conf and tries to
-# connect to an Ollama instance running on the Windows side.
+# Detects the Windows host IP (via eth0 default route, then /etc/resolv.conf)
+# and tries to connect to an Ollama instance running on the Windows side.
 # Falls back to installing Ollama locally inside WSL if unreachable.
 #
 # Updates OLLAMA_BASE_URL in the project root .env file.
@@ -22,9 +22,18 @@ th0th_banner
 
 info "Detecting environment..."
 
-# Get Windows host IP from WSL DNS resolver
-WINDOWS_IP=$(grep nameserver /etc/resolv.conf | awk '{print $2}' | head -1)
-echo "Windows host IP: ${WINDOWS_IP}"
+# shellcheck source=scripts/lib/detect-wsl-ip.sh
+source "${PROJECT_ROOT}/scripts/lib/detect-wsl-ip.sh"
+
+WINDOWS_IP=$(detect_wsl_windows_ip) && _detect_method="auto" || _detect_method="failed"
+
+if [ "$_detect_method" = "auto" ]; then
+    echo "Windows host IP: ${WINDOWS_IP}"
+else
+    echo "WARNING: Could not detect Windows host IP automatically."
+    read -p "Enter the Windows host IP manually (or press Enter to try localhost): " _manual_ip
+    WINDOWS_IP="${_manual_ip:-127.0.0.1}"
+fi
 
 # Test connectivity to Ollama running on the Windows host
 echo ""

@@ -26,6 +26,7 @@
     "bench:beir": "bun run --filter @th0th-ai/core bench:beir",
     "lint": "turbo run lint",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist",
+    "test:scripts": "bash scripts/tests/test-wsl-ip-detection.sh",
     "diagnose": "bun scripts/diagnose.ts",
     "version:sync": "bun scripts/version-sync.ts"
   },
