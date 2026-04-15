@@ -61,8 +61,10 @@ EOF
 GITHUB_REPO="S1LV4/th0th"
 GITHUB_RAW="https://raw.githubusercontent.com/${GITHUB_REPO}"
 GITHUB_URL="https://github.com/${GITHUB_REPO}"
-DOCKER_API_IMAGE="s1lv4/th0th-ai:api-latest"
-DOCKER_MCP_IMAGE="s1lv4/th0th-ai:mcp-latest"
+# Docker Hub org is the lowercase GitHub owner (Docker requires lowercase).
+_DOCKER_ORG=$(echo "${GITHUB_REPO%%/*}" | tr '[:upper:]' '[:lower:]')
+DOCKER_API_IMAGE="${_DOCKER_ORG}/th0th:api-latest"
+DOCKER_MCP_IMAGE="${_DOCKER_ORG}/th0th:mcp-latest"
 
 # ── Config (overridable via env) ──────────────────────────────
 MODE="${TH0TH_MODE:-}"
@@ -114,10 +116,20 @@ detect_ollama_url() {
     candidates+=("http://host.docker.internal:11434")
   fi
 
-  # WSL: try Windows host IP first
+  # WSL: try Windows host IP first.
+  # Prefer the eth0 default gateway (always the WSL2→Windows bridge) over the
+  # /etc/resolv.conf nameserver, which Docker can rewrite to its own bridge IP.
   if [ "$os" = "wsl" ]; then
-    local win_ip; win_ip=$(grep nameserver /etc/resolv.conf 2>/dev/null | awk '{print $2}' | head -1)
-    [ -n "$win_ip" ] && candidates+=("http://${win_ip}:11434")
+    local eth0_gw; eth0_gw=$(ip route show 2>/dev/null \
+        | awk '/^default/ && $5 == "eth0" {print $3; exit}')
+    if [ -n "$eth0_gw" ]; then
+      candidates+=("http://${eth0_gw}:11434")
+    fi
+    # Also add the resolv.conf nameserver as a secondary candidate.
+    local resolv_ip; resolv_ip=$(grep nameserver /etc/resolv.conf 2>/dev/null \
+        | awk '{print $2}' | head -1)
+    [ -n "$resolv_ip" ] && [ "$resolv_ip" != "$eth0_gw" ] \
+        && candidates+=("http://${resolv_ip}:11434")
   fi
 
   # Local fallback
@@ -192,6 +204,9 @@ write_env() {
   local dir="$1"
   local ollama_url="$2"
   local db_url="$3"
+  # Optional: override image names (default to Docker Hub constants)
+  local api_image="${4:-$DOCKER_API_IMAGE}"
+  local mcp_image="${5:-$DOCKER_MCP_IMAGE}"
   local env_file="${dir}/.env"
 
   # Don't overwrite existing .env — just update key fields
@@ -206,8 +221,8 @@ write_env() {
 
 # ── API ──────────────────────────────────────────────────────
 TH0TH_API_PORT=${API_PORT}
-TH0TH_API_IMAGE=${DOCKER_API_IMAGE}
-TH0TH_MCP_IMAGE=${DOCKER_MCP_IMAGE}
+TH0TH_API_IMAGE=${api_image}
+TH0TH_MCP_IMAGE=${mcp_image}
 NODE_ENV=production
 
 # ── Database ─────────────────────────────────────────────────
@@ -469,14 +484,15 @@ install_build() {
   local ollama_url; ollama_url=$(detect_ollama_url "docker")
   check_ollama "$ollama_url" || true
   local db_url="postgresql://th0th:${DB_PASS}@localhost:${POSTGRES_PORT}/th0th"
-  write_env "$INSTALL_DIR" "$ollama_url" "$db_url"
+  # Pass local image names so the .env points at what was actually built,
+  # not the Docker Hub constants (which may not exist or be stale).
+  write_env "$INSTALL_DIR" "$ollama_url" "$db_url" "th0th-api:local" "th0th-mcp:local"
   echo ""
 
   echo -e "${BOLD}[4/5] Building Docker images...${NC}"
   (cd "$INSTALL_DIR" && docker build --target api -t th0th-api:local .)
   (cd "$INSTALL_DIR" && docker build --target mcp -t th0th-mcp:local .)
   ok "Images built"
-  # Point compose to local images
   export TH0TH_API_IMAGE="th0th-api:local"
   export TH0TH_MCP_IMAGE="th0th-mcp:local"
   echo ""

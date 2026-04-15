@@ -35,6 +35,21 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
 
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: th0th
+          POSTGRES_PASSWORD: th0th_password
+          POSTGRES_DB: th0th
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -66,8 +81,25 @@ jobs:
 
       - name: Start API container
         run: |
-          docker run -d --name th0th-api -p 3333:3333 th0th-api:test
-          sleep 5
+          docker run -d --name th0th-api \
+            --network host \
+            -e DATABASE_URL="postgresql://th0th:th0th_password@localhost:5432/th0th" \
+            -e NODE_ENV=test \
+            -p 3333:3333 \
+            th0th-api:test
+
+      - name: Wait for API to be ready
+        run: |
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:3333/health > /dev/null 2>&1; then
+              echo "API ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API did not become ready in 20s"
+          docker logs th0th-api
+          exit 1
 
       - name: Health check
         run: |

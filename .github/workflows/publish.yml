@@ -198,7 +198,7 @@ jobs:
         id: meta-api
         uses: docker/metadata-action@v5
         with:
-          images: s1lv4/th0th-ai
+          images: s1lv4/th0th
           tags: |
             type=raw,value=api-${{ steps.version.outputs.version }}
             type=raw,value=api-latest,enable={{is_default_branch}}
@@ -207,7 +207,7 @@ jobs:
         id: meta-mcp
         uses: docker/metadata-action@v5
         with:
-          images: s1lv4/th0th-ai
+          images: s1lv4/th0th
           tags: |
             type=raw,value=mcp-${{ steps.version.outputs.version }}
             type=raw,value=mcp-latest,enable={{is_default_branch}}
