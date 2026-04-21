@@ -5,17 +5,31 @@
  * POST /api/v1/context/optimized  - Obter contexto otimizado
  */
 
-import { Elysia, t } from "elysia";
 import { CompressContextTool, GetOptimizedContextTool } from "@th0th-ai/core";
+import { Elysia, t } from "elysia";
 
-const compressContextTool = new CompressContextTool();
-const getOptimizedContextTool = new GetOptimizedContextTool();
+let compressContextTool: CompressContextTool | null = null;
+let optimizedContextTool: GetOptimizedContextTool | null = null;
+
+function getCompressContextTool(): CompressContextTool {
+  if (!compressContextTool) {
+    compressContextTool = new CompressContextTool();
+  }
+  return compressContextTool;
+}
+
+function getOptimizedContextTool(): GetOptimizedContextTool {
+  if (!optimizedContextTool) {
+    optimizedContextTool = new GetOptimizedContextTool();
+  }
+  return optimizedContextTool;
+}
 
 export const contextRoutes = new Elysia({ prefix: "/api/v1/context" })
   .post(
     "/compress",
     async ({ body }) => {
-      return await compressContextTool.handle(body);
+      return await getCompressContextTool().handle(body);
     },
     {
       body: t.Object({
@@ -56,7 +70,7 @@ export const contextRoutes = new Elysia({ prefix: "/api/v1/context" })
   .post(
     "/optimized",
     async ({ body }) => {
-      return await getOptimizedContextTool.handle(body);
+      return await getOptimizedContextTool().handle(body);
     },
     {
       body: t.Object({

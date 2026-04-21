@@ -4,15 +4,22 @@
  * POST /api/v1/analytics - Obter analytics e métricas
  */
 
-import { Elysia, t } from "elysia";
 import { GetAnalyticsTool } from "@th0th-ai/core";
+import { Elysia, t } from "elysia";
 
-const getAnalyticsTool = new GetAnalyticsTool();
+let analyticsTool: GetAnalyticsTool | null = null;
+
+function getAnalyticsTool(): GetAnalyticsTool {
+  if (!analyticsTool) {
+    analyticsTool = new GetAnalyticsTool();
+  }
+  return analyticsTool;
+}
 
 export const analyticsRoutes = new Elysia({ prefix: "/api/v1/analytics" }).post(
   "/",
   async ({ body }) => {
-    return await getAnalyticsTool.handle(body);
+    return await getAnalyticsTool().handle(body);
   },
   {
     body: t.Object({

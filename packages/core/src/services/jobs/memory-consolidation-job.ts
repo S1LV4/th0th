@@ -1,7 +1,7 @@
 import { logger, MemoryLevel } from "@th0th-ai/shared";
-import { getPrismaClient } from "../query/prisma-client.js";
 import type { PrismaClient } from "../../generated/prisma/index.js";
 import { Prisma } from "../../generated/prisma/index.js";
+import { getPrismaClient } from "../query/prisma-client.js";
 
 interface ConsolidationStats {
   promoted: number;
@@ -33,7 +33,19 @@ export class MemoryConsolidationJob {
   private runCount = 0;
   private readonly minIntervalMs = 5 * 60 * 1000;
 
+  private isPostgresEnabled(): boolean {
+    const databaseUrl = process.env.DATABASE_URL;
+    return (
+      databaseUrl?.startsWith("postgresql://") === true ||
+      databaseUrl?.startsWith("postgres://") === true
+    );
+  }
+
   maybeRun(trigger: "store" | "search" = "store"): void {
+    if (!this.isPostgresEnabled()) {
+      return;
+    }
+
     const now = Date.now();
     if (this.running || now - this.lastRunAt < this.minIntervalMs) {
       return;
