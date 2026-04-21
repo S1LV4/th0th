@@ -1,4 +1,4 @@
-<img src="https://i.imgur.com/5EJK9OF.png" alt="th0th" style="visibility: visible; max-width: 60%; display: block; margin: 0 auto;" />
+<img src="https://i.imgur.com/WP7ivBc.png" alt="th0th" style="visibility: visible; max-width: 60%; display: block; margin: 0 auto;" />
 
 # th0th
 
@@ -6,23 +6,49 @@
 
 Semantic search with 98% token reduction for AI assistants.
 
+Como reduzi 98% do uso de contexto (e custos) de IA no meu workflow / How I reduced AI context usage (and costs) by 98% in my workflow
+https://www.tabnews.com.br/S1LV4/como-reduzi-em-98-por-cento-o-uso-de-contexto-e-os-custos-de-ia-no-meu-workflow
+
 ---
 
 ## Quick Start
 
+### One-line install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/S1LV4/th0th/main/install.sh | bash
+```
+
+Installs interactively. Three modes:
+
+| Mode | Requires | Best for |
+|------|----------|----------|
+| **Docker** (default) | Docker | Production, quick start |
+| **Docker build** | Docker + Git | Custom builds, local changes |
+| **Source** | Git + Bun | Development, contributors |
+
+Non-interactive (CI/scripted):
+
+```bash
+# Docker mode, custom port, skip start
+TH0TH_MODE=docker TH0TH_API_PORT=4000 TH0TH_NO_START=1 \
+  curl -fsSL https://raw.githubusercontent.com/S1LV4/th0th/main/install.sh | bash
+```
+
+### Manual setup (from source)
+
 ```bash
 # 1. Clone and install
-git clone <repo-url>
+git clone https://github.com/S1LV4/th0th.git
 cd th0th
 bun install
 
 # 2. Setup (100% offline with Ollama)
 ./scripts/setup-local-first.sh
-# This will:
-# - Install/start Ollama
-# - Pull nomic-embed-text:latest model
-# - Create ~/.config/th0th/config.json
-# - Create .env file with defaults
+# - Installs/starts Ollama
+# - Pulls bge-m3 embedding model (1024 dimensions)
+# - Creates .env with defaults
+# - Runs bun run diagnose to validate the stack
 
 # 3. Build and start
 bun run build
@@ -31,8 +57,8 @@ bun run start:api
 
 Verify: `curl http://localhost:3333/health`
 
-**Note**: The setup script creates a `.env` file at the project root with default values. 
-The API runs in `apps/tools-api/` directory and will load environment variables from the root `.env` automatically.
+> **Tip:** Run `bun run diagnose` at any time to validate Ollama connectivity,
+> database access, embedding generation, and migration status.
 
 ---
 
@@ -46,11 +72,14 @@ File: `~/.config/opencode/opencode.json`
 
 ```json
 {
-  "mcpServers": {
+  "mcp": {
     "th0th": {
       "type": "local",
-        "command": ["bunx", "@th0th-ai/mcp-client"],
-      "env": {
+      "command": [
+        "bunx",
+        "@th0th-ai/mcp-client"
+      ],
+      "environment": {
         "TH0TH_API_URL": "http://localhost:3333"
       },
       "enabled": true
@@ -196,7 +225,7 @@ npx @th0th-ai/mcp-client --help
 
 | Provider | Model | Cost | Quality |
 |----------|-------|------|---------|
-| **Ollama** (default) | nomic-embed-text, bge-m3 | Free | Good |
+| **Ollama** (default) | qwen3-embedding, bge-m3, nomic-embed-text | Free | Good-Excellent |
 | **Mistral** | mistral-embed, codestral-embed | $$ | Great |
 | **OpenAI** | text-embedding-3-small | $$ | Great |
 
@@ -212,10 +241,10 @@ npx @th0th-ai/mcp-client --config-init --openai your-api-key    # OpenAI
 
 # Switch provider
 npx @th0th-ai/mcp-client --config-init --mistral your-api-key
-npx @th0th-ai/mcp-client --config-init --ollama-model bge-m3
+npx @th0th-ai/mcp-client --config-init --ollama-model qwen3-embedding
 
 # Set specific configuration values
-npx @th0th-ai/mcp-client --config-set embedding.dimensions 1024
+npx @th0th-ai/mcp-client --config-set embedding.dimensions 4096
 ```
 
 ---
@@ -233,6 +262,7 @@ npx @th0th-ai/mcp-client --config-set embedding.dimensions 1024
 | `bun run test` | Run tests |
 | `bun run lint` | Lint code |
 | `bun run type-check` | Type checking |
+| `bun run diagnose` | Validate full stack (Ollama, database, embeddings) |
 
 ---
 

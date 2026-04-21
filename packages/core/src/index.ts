@@ -22,12 +22,14 @@ export * from "./services/index.js";
 
 // Data
 export { MemoryRepository } from "./data/memory/memory-repository.js";
+export { getMemoryRepository } from "./data/memory/memory-repository-factory.js";
 export type {
   MemoryRow,
   InsertMemoryInput,
   SearchFilters,
 } from "./data/memory/memory-repository.js";
-export { sqliteVectorStore, SQLiteVectorStore } from "./data/vector/index.js";
+export { getVectorStore, resetVectorStore } from "./data/vector/index.js";
+export { SQLiteVectorStore } from "./data/vector/index.js";
 
 // Re-export types from shared for convenience
 export type { ToolResponse, IToolHandler } from "@th0th-ai/shared";

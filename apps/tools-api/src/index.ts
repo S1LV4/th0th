@@ -20,6 +20,9 @@ import { projectRoutes } from "./routes/project.js";
 import { contextRoutes } from "./routes/context.js";
 import { analyticsRoutes } from "./routes/analytics.js";
 import { systemRoutes } from "./routes/system.js";
+import { eventsRoutes } from "./routes/events.js";
+import { workspaceRoutes } from "./routes/workspace.js";
+import { fileRoutes } from "./routes/file.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error.js";
 import { getHealthChecker } from "@th0th-ai/core";
@@ -35,18 +38,22 @@ const app = new Elysia({ adapter: node() })
           title: "th0th Tools API",
           version: "1.0.0",
           description:
-            "API de ferramentas de contexto semântico, memória e busca de código. Consumida pelo MCP Client e outros clientes.",
+            "Semantic context, memory, and code search tooling API. Consumed by the MCP Client and other clients.",
         },
         tags: [
-          { name: "search", description: "Busca semântica e por keywords" },
-          { name: "memory", description: "Armazenamento e busca de memórias" },
-          { name: "project", description: "Indexação de projetos" },
+          { name: "search", description: "Semantic and keyword search" },
+          { name: "memory", description: "Memory storage and retrieval" },
+          { name: "project", description: "Project indexing" },
           {
             name: "context",
-            description: "Compressão e otimização de contexto",
+            description: "Context compression and optimization",
           },
-          { name: "analytics", description: "Métricas e analytics" },
-          { name: "system", description: "Sistema, health checks e métricas" },
+          { name: "analytics", description: "Metrics and analytics" },
+          { name: "system", description: "System health checks and metrics" },
+          { name: "workspace", description: "Workspace management and Symbol Graph" },
+          { name: "symbol", description: "Code navigation: definitions and references" },
+          { name: "events", description: "SSE for real-time indexing progress" },
+          { name: "file", description: "Optimized file reading with automatic compression" },
         ],
       },
     }),
@@ -59,6 +66,9 @@ const app = new Elysia({ adapter: node() })
   .use(contextRoutes)
   .use(analyticsRoutes)
   .use(systemRoutes)
+  .use(eventsRoutes)
+  .use(workspaceRoutes)
+  .use(fileRoutes)
   .get("/health", () => ({
     status: "ok",
     service: "th0th-tools-api",
@@ -69,6 +79,18 @@ const app = new Elysia({ adapter: node() })
 
 console.log(`th0th Tools API running at http://localhost:${PORT}`);
 console.log(`Swagger docs at http://localhost:${PORT}/swagger`);
+
+// Graceful shutdown
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, async () => {
+    console.log(`${signal} received, shutting down gracefully...`);
+    try {
+      const { disconnectPrisma } = await import('@th0th-ai/core/services');
+      await disconnectPrisma();
+    } catch {}
+    process.exit(0);
+  });
+}
 
 // Run local health check on startup (non-blocking)
 (async () => {

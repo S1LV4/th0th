@@ -63,6 +63,7 @@ export type { MemoryCluster, ClusteringResult } from "./memory/memory-clustering
 
 // Checkpoint (task state persistence)
 export { CheckpointManager } from "./checkpoint/checkpoint-manager.js";
+export type { CheckpointMetadata } from "./checkpoint/checkpoint-manager.js";
 export { AutoCheckpointer } from "./checkpoint/auto-checkpointer.js";
 export type { AutoCheckpointerOptions, CheckpointTrigger } from "./checkpoint/auto-checkpointer.js";
 
@@ -73,3 +74,40 @@ export type {
   ChunkCheckResult,
   SessionCacheStats,
 } from "./context/session-file-cache.js";
+
+// ETL Pipeline
+export { etlPipeline, EtlPipeline } from "./etl/pipeline.js";
+export type { PipelineInput, EtlResult, EtlStage } from "./etl/index.js";
+
+// Symbol Graph
+export { symbolGraphService, SymbolGraphService } from "./symbol/symbol-graph.service.js";
+export { computePageRank } from "./symbol/centrality.js";
+export type {
+  DefinitionResult,
+  ReferenceResult,
+  DependencyGraph,
+  DependencyNode,
+  DependencyEdge,
+  ListDefinitionsOptions,
+  CentralityResult,
+} from "./symbol/symbol-graph.service.js";
+
+// Events
+export { eventBus, EventBus } from "./events/event-bus.js";
+export type { EventMap, EventName } from "./events/event-bus.js";
+
+// Metrics (token savings observability)
+export { TokenMetrics } from "./metrics/token-metrics.js";
+export type {
+  ModelPricing as TokenModelPricing,
+  TokenSavingsBreakdown,
+  TokenMetricsStats,
+  TokenMetricsTimeSeries,
+} from "./metrics/token-metrics.js";
+
+// Workspace Manager
+export { workspaceManager, WorkspaceManager } from "./workspace/workspace-manager.js";
+export type { WorkspaceRow, WorkspaceStatus } from "./workspace/workspace-manager.js";
+
+// Prisma lifecycle
+export { getPrismaClient, disconnectPrisma } from "./query/prisma-client.js";

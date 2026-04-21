@@ -9,6 +9,9 @@
  * - Optimized for multiple projects with embedding reuse
  */
 
+// Load environment variables FIRST before any config
+import "../env.js";
+
 import path from "path";
 import os from "os";
 
@@ -233,7 +236,11 @@ export class Config {
       },
       vectorStore: { ...defaults.vectorStore, ...overrides.vectorStore },
       keywordSearch: { ...defaults.keywordSearch, ...overrides.keywordSearch },
-      compression: { ...defaults.compression, ...overrides.compression },
+      compression: {
+        ...defaults.compression,
+        ...overrides.compression,
+        llm: { ...defaults.compression.llm, ...overrides.compression?.llm },
+      },
       rateLimit: { ...defaults.rateLimit, ...overrides.rateLimit },
       security: { ...defaults.security, ...overrides.security },
       logging: { ...defaults.logging, ...overrides.logging },

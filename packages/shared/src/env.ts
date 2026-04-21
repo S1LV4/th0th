@@ -14,9 +14,8 @@ import { resolve, dirname } from "path";
 
 function findEnvFile(): string | undefined {
   let dir = process.cwd();
-  const root = dirname(dir); // stop condition (e.g. "/" on unix)
 
-  while (dir !== root) {
+  while (true) {
     const envPath = resolve(dir, ".env");
     if (existsSync(envPath)) {
       return envPath;

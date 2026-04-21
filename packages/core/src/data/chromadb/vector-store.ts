@@ -4,7 +4,7 @@
  * Wrapper for ChromaDB operations with embedding support
  */
 
-import { IVectorStore, IVectorCollection, VectorDocument } from '@th0th-ai/shared';
+import { IVectorStore, IVectorCollection, VectorDocument, VectorStoreStats, ProjectInfo } from '@th0th-ai/shared';
 import { SearchResult, SearchSource } from '@th0th-ai/shared';
 import { config } from '@th0th-ai/shared';
 import { logger } from '@th0th-ai/shared';
@@ -151,6 +151,79 @@ export class VectorStore implements IVectorStore {
     this.collections.set(name, collection);
     
     return collection;
+  }
+
+  /**
+   * Add multiple documents (batch)
+   * Stub implementation for ChromaDB
+   */
+  async addDocuments(documents: VectorDocument[]): Promise<void> {
+    const collection = await this.getCollection(this.defaultCollection);
+    await collection.add(documents);
+  }
+
+  /**
+   * Delete all documents for a project
+   * Stub implementation for ChromaDB
+   */
+  async deleteByProject(projectId: string): Promise<number> {
+    logger.warn('deleteByProject not fully implemented for ChromaDB', { projectId });
+    return 0;
+  }
+
+  /**
+   * Search by pre-computed embedding
+   * Stub implementation for ChromaDB
+   */
+  async searchByEmbedding(
+    embedding: number[],
+    limit?: number,
+    projectId?: string
+  ): Promise<SearchResult[]> {
+    logger.warn('searchByEmbedding not fully implemented for ChromaDB');
+    return [];
+  }
+
+  /**
+   * Get store statistics
+   * Stub implementation for ChromaDB
+   */
+  async getStats(projectId?: string): Promise<VectorStoreStats> {
+    const collection = await this.getCollection(this.defaultCollection);
+    const count = await collection.count();
+    
+    return {
+      totalDocuments: count,
+      totalSize: 0,
+      indexType: 'hnsw',
+      indexStatus: 'ready',
+    };
+  }
+
+  /**
+   * List all projects
+   * Stub implementation for ChromaDB
+   */
+  async listProjects(): Promise<ProjectInfo[]> {
+    logger.warn('listProjects not fully implemented for ChromaDB');
+    return [];
+  }
+
+  /**
+   * Health check
+   * Stub implementation for ChromaDB
+   */
+  async healthCheck(): Promise<boolean> {
+    return true;
+  }
+
+  /**
+   * Close connections
+   * Stub implementation for ChromaDB
+   */
+  async close(): Promise<void> {
+    this.collections.clear();
+    this.client = null;
   }
 }
 
@@ -340,8 +413,11 @@ export class EmbeddingService {
     await this.ensureInitialized();
 
     if (!this.provider) {
-      logger.warn('No embedding provider available, using dummy embeddings');
-      // Fallback to random embeddings (for development/testing only)
+      const msg = 'No embedding provider available. Configure OLLAMA_BASE_URL or an API key.';
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(msg);
+      }
+      logger.warn(msg + ' Using random embeddings (dev only).');
       return new Array(384).fill(0).map(() => Math.random());
     }
 
@@ -368,8 +444,11 @@ export class EmbeddingService {
     await this.ensureInitialized();
 
     if (!this.provider) {
-      logger.warn('No embedding provider available, using dummy embeddings');
-      // Fallback to random embeddings
+      const msg = 'No embedding provider available. Configure OLLAMA_BASE_URL or an API key.';
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(msg);
+      }
+      logger.warn(msg + ' Using random embeddings (dev only).');
       return texts.map(() => new Array(384).fill(0).map(() => Math.random()));
     }
 

@@ -10,12 +10,11 @@
 import fs from "fs";
 import path from "path";
 import { glob } from "glob";
-import ignoreModule, { Ignore } from "ignore";
 import { logger, config } from "@th0th-ai/shared";
 import type { IVectorStore } from "@th0th-ai/shared";
+import { loadProjectIgnore } from "./ignore-patterns.js";
 
 const globAsync = glob;
-const ignore = (ignoreModule as any).default || ignoreModule;
 
 interface IndexMetadata {
   projectId: string;
@@ -148,8 +147,10 @@ export class IndexManager {
   async getFilesToReindex(
     projectId: string,
     projectPath: string,
+    previousStaleCheck?: StaleCheckResult,
   ): Promise<string[]> {
-    const staleCheck = await this.isIndexStale(projectId, projectPath);
+    // Reuse previous stale check if provided to avoid double filesystem scan
+    const staleCheck = previousStaleCheck ?? await this.isIndexStale(projectId, projectPath);
 
     if (!staleCheck.isStale) {
       return [];
@@ -230,49 +231,10 @@ export class IndexManager {
   }
 
   /**
-   * Load and parse .gitignore file
+   * Load and parse .gitignore file (delegates to shared ignore-patterns module)
    */
-  private async loadGitignore(projectPath: string): Promise<Ignore> {
-    const ig = ignore();
-
-    // Add default ignores (always ignore these)
-    ig.add([
-      "node_modules/**",
-      ".git/**",
-      "dist/**",
-      "build/**",
-      "coverage/**",
-      "*.db",
-      "*.db-shm",
-      "*.db-wal",
-      ".env",
-      ".env.*",
-    ]);
-
-    try {
-      const gitignorePath = path.join(projectPath, ".gitignore");
-      const gitignoreContent = await fs.promises.readFile(
-        gitignorePath,
-        "utf8",
-      );
-
-      // Parse .gitignore (filter out comments and empty lines)
-      const rules = gitignoreContent
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith("#"));
-
-      ig.add(rules);
-
-      logger.info("Loaded .gitignore", {
-        projectPath,
-        rulesCount: rules.length,
-      });
-    } catch (error) {
-      logger.debug("No .gitignore found, using defaults only", { projectPath });
-    }
-
-    return ig;
+  private loadGitignore(projectPath: string) {
+    return loadProjectIgnore(projectPath);
   }
 
   /**
@@ -295,37 +257,33 @@ export class IndexManager {
         ".py",
       ];
 
-      // Build glob patterns from extensions
-      const patterns = allowedExtensions.map((ext: string) => `**/*${ext}`);
+      // Single combined glob pattern (avoids N separate directory traversals)
+      const combinedPattern = `**/*{${allowedExtensions.join(",")}}`;
 
       // Load .gitignore rules
       const ig = await this.loadGitignore(projectPath);
 
-      for (const pattern of patterns) {
-        const matches = await globAsync(pattern, {
-          cwd: projectPath,
-          nodir: true,
-          dot: false, // Don't include hidden files by default
-        });
+      const matches = await globAsync(combinedPattern, {
+        cwd: projectPath,
+        nodir: true,
+        dot: false,
+      });
 
-        for (const match of matches) {
-          // Check if file should be ignored
-          if (ig.ignores(match)) {
-            logger.debug("Ignoring file per .gitignore", { filePath: match });
-            continue;
-          }
+      for (const match of matches) {
+        if (ig.ignores(match)) {
+          continue;
+        }
 
-          const fullPath = path.join(projectPath, match);
-          try {
-            const stat = await fs.promises.stat(fullPath);
-            files.set(match, {
-              path: match,
-              mtime: stat.mtimeMs,
-              size: stat.size,
-            });
-          } catch (error) {
-            logger.warn("Failed to stat file during scan", { filePath: match });
-          }
+        const fullPath = path.join(projectPath, match);
+        try {
+          const stat = await fs.promises.stat(fullPath);
+          files.set(match, {
+            path: match,
+            mtime: stat.mtimeMs,
+            size: stat.size,
+          });
+        } catch (error) {
+          logger.warn("Failed to stat file during scan", { filePath: match });
         }
       }
 

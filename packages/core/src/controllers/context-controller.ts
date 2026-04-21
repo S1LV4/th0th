@@ -3,7 +3,14 @@
  *
  * Orchestration layer for the "optimized context" use case.
  * Composes SearchController + MemoryController + CompressContextTool
- * to deliver token-efficient context to agents.
+ * + SymbolGraphService to deliver token-efficient context to agents.
+ *
+ * Ranking pipeline (2 phases):
+ *   Phase 1 — Graph prefilter: if query looks like a symbol name,
+ *             fetch structural context (definition + references) from
+ *             the Symbol Graph (pure SQLite, <20ms).
+ *   Phase 2 — Hybrid semantic search: vector + FTS5 + RRF, with
+ *             centrality boost and graph-file boosting applied.
  */
 
 import { logger, estimateTokens } from "@th0th-ai/shared";
@@ -14,6 +21,8 @@ import {
   SessionFileCache,
   REFERENCE_TOKEN_COST,
 } from "../services/context/session-file-cache.js";
+import { symbolGraphService } from "../services/symbol/symbol-graph.service.js";
+import { TokenMetrics } from "../services/metrics/token-metrics.js";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -104,6 +113,43 @@ export class ContextController {
       workingMemoryBudget: wmBudget,
     });
 
+    // ── Phase 1: Graph prefilter (structural context) ───────────────────
+    // If query looks like a symbol name (<= 60 chars, no complex phrases)
+    // fetch definition + references from the Symbol Graph (SQLite, ~10ms).
+    // The graph-mentioned files are passed to the semantic search as boostFiles.
+    let graphContextSection = "";
+    let graphBoostFiles: string[] = [];
+
+    if (projectId && await symbolGraphService.hasData(projectId) && looksLikeSymbol(query)) {
+      try {
+        const [defs, refs] = await Promise.all([
+          symbolGraphService.goToDefinition(projectId, query),
+          symbolGraphService.getReferences(projectId, query),
+        ]);
+
+        if (defs.length > 0) {
+          const graphTokenBudget = Math.floor(codeTokenBudget * 0.2);
+          graphContextSection = formatGraphContext(defs, refs, graphTokenBudget);
+          graphBoostFiles = [
+            ...new Set([
+              ...defs.map((d) => d.file),
+              ...refs.slice(0, 10).map((r) => r.fromFile),
+            ]),
+          ];
+
+          logger.debug("Graph prefilter hit", {
+            query,
+            defs: defs.length,
+            refs: refs.length,
+            boostFiles: graphBoostFiles.length,
+          });
+        }
+      } catch (err) {
+        // Graph errors are non-fatal — fall through to semantic search only
+        logger.warn("Graph prefilter failed", { query, error: (err as Error).message });
+      }
+    }
+
     // Step 1: Search code + memories in parallel
     const [searchResult, memories] = await Promise.all([
       this.searchCtrl.searchProject({
@@ -114,6 +160,8 @@ export class ContextController {
         responseMode: "full",
         autoReindex: false,
         minScore: 0.4,
+        // Phase 2: boost files identified by the graph prefilter
+        boostFiles: graphBoostFiles.length > 0 ? graphBoostFiles : undefined,
       }),
       includeMemories
         ? this.searchMemoriesSafe(query, {
@@ -194,6 +242,11 @@ export class ContextController {
     // Step 4: Assemble raw context
     const parts: string[] = [`# Context for: ${query}\n`];
 
+    // Prepend graph structural context if available
+    if (graphContextSection) {
+      parts.push(graphContextSection, "");
+    }
+
     if (memorySection) {
       parts.push(memorySection, "");
     }
@@ -260,11 +313,21 @@ export class ContextController {
     }
 
     const finalTokens = estimateTokens(finalContext, "code");
+    const totalTokensSaved = rawTokens - finalTokens;
+    const compressionSavings = tokensSaved; // From compressor
+
+    // Record in global TokenMetrics
+    TokenMetrics.getInstance().recordContextRequest(
+      rawTokens,
+      finalTokens,
+      tokensSavedBySessionCache,
+      compressionSavings,
+    );
 
     logger.info("Optimized context retrieved", {
       rawTokens,
       finalTokens,
-      tokensSaved: rawTokens - finalTokens,
+      tokensSaved: totalTokensSaved,
       compressionRatio,
       codeSources: workingSet.length,
       memoriesIncluded: memories.length,
@@ -278,7 +341,7 @@ export class ContextController {
       sources: workingSet.map((r: any) => r.filePath || "unknown"),
       resultsCount: workingSet.length,
       memoriesCount: memories.length,
-      tokensSaved: rawTokens - finalTokens,
+      tokensSaved: totalTokensSaved,
       compressionRatio,
       sessionCacheHits,
       tokensSavedBySessionCache,
@@ -389,4 +452,68 @@ export class ContextController {
 
     return selected;
   }
+}
+
+// ── Module-level helpers for graph prefilter ────────────────────────────────
+
+/**
+ * Heuristic: a query "looks like a symbol name" if it's short,
+ * has no spaces (or at most 1 word separator), and matches identifier-like chars.
+ * Examples: "ContextualSearchRLM", "searchProject", "EtlPipeline"
+ */
+function looksLikeSymbol(query: string): boolean {
+  if (query.length > 80) return false;
+  const words = query.trim().split(/\s+/);
+  if (words.length > 3) return false;
+  // Must look like a camelCase/PascalCase/snake_case identifier
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(words[0]);
+}
+
+/**
+ * Format Symbol Graph results into a compact Markdown section.
+ * Token budget capped to avoid dominating the context window.
+ */
+function formatGraphContext(
+  defs: Array<{ name: string; kind: string; file: string; lineStart: number; lineEnd: number; docComment?: string; snippet?: string }>,
+  refs: Array<{ fromFile: string; fromLine: number; refKind: string }>,
+  tokenBudget: number,
+): string {
+  const parts: string[] = ["## Symbol Graph\n"];
+
+  // Definitions
+  if (defs.length > 0) {
+    parts.push("### Definition(s)\n");
+    for (const def of defs.slice(0, 3)) {
+      parts.push(`- **${def.kind}** \`${def.name}\` → \`${def.file}\` L${def.lineStart}–${def.lineEnd}`);
+      if (def.docComment) parts.push(`  > ${def.docComment.slice(0, 120)}`);
+      if (def.snippet) {
+        parts.push("  ```");
+        parts.push(def.snippet.split("\n").slice(0, 8).join("\n"));
+        parts.push("  ```");
+      }
+    }
+    parts.push("");
+  }
+
+  // References summary
+  if (refs.length > 0) {
+    parts.push(`### References (${refs.length} total)\n`);
+    // Group by file
+    const byFile = new Map<string, number[]>();
+    for (const r of refs.slice(0, 30)) {
+      const arr = byFile.get(r.fromFile) ?? [];
+      arr.push(r.fromLine);
+      byFile.set(r.fromFile, arr);
+    }
+    for (const [file, lines] of byFile) {
+      parts.push(`- \`${file}\` L${lines.join(", ")}`);
+    }
+    parts.push("");
+  }
+
+  const section = parts.join("\n");
+
+  // Respect token budget (rough estimate: 4 chars/token)
+  const charBudget = tokenBudget * 4;
+  return section.length > charBudget ? section.slice(0, charBudget) + "\n...\n" : section;
 }

@@ -32,7 +32,7 @@ export class CacheManager implements ICacheManager {
   constructor() {
     this.l1 = new L1MemoryCache();
     this.l2 = new L2SQLiteCache();
-    this.l3Enabled = false; // TODO: Integrate with remote L3 cache
+    this.l3Enabled = false; // NOTE: L3 remote cache not yet implemented
     
     logger.info('Cache Manager initialized', {
       l1: 'Memory',
@@ -69,7 +69,7 @@ export class CacheManager implements ICacheManager {
 
       // Try L3 (remote) if enabled
       if (this.l3Enabled) {
-        // TODO: Implement L3 lookup
+        // NOTE: L3 remote cache not yet implemented
         this.stats.l3Misses++;
       }
 
@@ -95,7 +95,7 @@ export class CacheManager implements ICacheManager {
       
       // Write to L3 if enabled
       if (this.l3Enabled) {
-        // TODO: Implement L3 write
+        // NOTE: L3 remote cache not yet implemented
       }
 
       logger.debug('Cache set: all levels', { key, ttl });

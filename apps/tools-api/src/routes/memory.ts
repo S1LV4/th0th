@@ -48,10 +48,10 @@ export const memoryRoutes = new Elysia({ prefix: "/api/v1/memory" })
     },
     {
       body: t.Object({
-        content: t.String({ description: "Content to store in memory" }),
+        content: t.String({ description: "Content to store in memory", maxLength: 100000 }),
         type: t.Union(
           [
-            t.Literal("preference"),
+            t.Literal("critical"),
             t.Literal("conversation"),
             t.Literal("code"),
             t.Literal("decision"),
@@ -67,6 +67,7 @@ export const memoryRoutes = new Elysia({ prefix: "/api/v1/memory" })
         importance: t.Optional(
           t.Number({ minimum: 0, maximum: 1, default: 0.5 }),
         ),
+        linkTo: t.Optional(t.Array(t.String())),
         format: t.Optional(
           t.Union([t.Literal("json"), t.Literal("toon")], { default: "toon" }),
         ),
@@ -94,7 +95,7 @@ export const memoryRoutes = new Elysia({ prefix: "/api/v1/memory" })
         types: t.Optional(
           t.Array(
             t.Union([
-              t.Literal("preference"),
+              t.Literal("critical"),
               t.Literal("conversation"),
               t.Literal("code"),
               t.Literal("decision"),
@@ -107,6 +108,7 @@ export const memoryRoutes = new Elysia({ prefix: "/api/v1/memory" })
           t.Number({ minimum: 0, maximum: 1, default: 0.3 }),
         ),
         includePersistent: t.Optional(t.Boolean({ default: true })),
+        includeRelated: t.Optional(t.Boolean({ default: false })),
         format: t.Optional(
           t.Union([t.Literal("json"), t.Literal("toon")], { default: "toon" }),
         ),
@@ -183,14 +185,14 @@ export const memoryRoutes = new Elysia({ prefix: "/api/v1/memory" })
       body: t.Object({
         type: t.Optional(
           t.Union([
-            t.Literal("preference"),
+            t.Literal("critical"),
             t.Literal("conversation"),
             t.Literal("code"),
             t.Literal("decision"),
             t.Literal("pattern"),
           ]),
         ),
-        limit: t.Optional(t.Number({ default: 50 })),
+        limit: t.Optional(t.Number({ default: 50, maximum: 500 })),
         offset: t.Optional(t.Number({ default: 0 })),
         minImportance: t.Optional(
           t.Number({ minimum: 0, maximum: 1, default: 0 }),

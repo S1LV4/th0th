@@ -34,10 +34,19 @@ export class ApiClient {
   }
 
   /**
-   * GET request to Tools API
+   * GET request to Tools API with optional query parameters
    */
-  async get(endpoint: string): Promise<unknown> {
-    return this.request("GET", endpoint);
+  async get(endpoint: string, queryParams?: Record<string, unknown>): Promise<unknown> {
+    let url = endpoint;
+    if (queryParams && Object.keys(queryParams).length > 0) {
+      const qs = new URLSearchParams(
+        Object.entries(queryParams)
+          .filter(([, v]) => v !== undefined && v !== null && v !== "")
+          .map(([k, v]) => [k, String(v)] as [string, string])
+      ).toString();
+      if (qs) url = `${endpoint}?${qs}`;
+    }
+    return this.request("GET", url);
   }
 
   /**

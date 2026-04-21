@@ -4,26 +4,17 @@ set -e
 # ========================================
 # th0th - VSCode Integration Validator
 # ========================================
-# Valida se a integração th0th + VSCode está funcionando
+# Validates that the th0th + VSCode integration is working.
 #
-# Uso: ./scripts/validate-vscode-integration.sh
+# Usage: ./scripts/validate-vscode-integration.sh
 # ========================================
 
-BOLD='\033[1m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# shellcheck source=scripts/banner.sh
+source "$(dirname "${BASH_SOURCE[0]}")/banner.sh"
+th0th_banner
 
 ERRORS=0
 WARNINGS=0
-
-echo ""
-echo -e "${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║           th0th - Integration Validation                      ║${NC}"
-echo -e "${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
-echo ""
 
 # Get th0th root directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

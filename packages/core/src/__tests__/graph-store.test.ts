@@ -327,4 +327,105 @@ describe("GraphStore", () => {
       fs.rmSync(freshTmp, { recursive: true, force: true });
     });
   });
+
+  // ── Performance & Optimizations ────────────────────────────
+  describe("performance optimizations", () => {
+    test("getAllEdges uses UNION ALL for efficient index lookups", () => {
+      // Create a hub memory with many edges in both directions
+      const hubId = "hub";
+      
+      // 50 outgoing edges
+      for (let i = 0; i < 50; i++) {
+        store.createEdge(
+          hubId,
+          `target_${i}`,
+          MemoryRelationType.SUPPORTS,
+          { weight: 0.5 + (i / 100) }
+        );
+      }
+      
+      // 50 incoming edges
+      for (let i = 0; i < 50; i++) {
+        store.createEdge(
+          `source_${i}`,
+          hubId,
+          MemoryRelationType.DERIVED_FROM,
+          { weight: 0.6 + (i / 100) }
+        );
+      }
+
+      const start = performance.now();
+      const edges = store.getAllEdges(hubId, { limit: 200 });
+      const duration = performance.now() - start;
+
+      // Should retrieve all 100 edges efficiently
+      expect(edges.length).toBe(100);
+      
+      // Should be fast (UNION ALL with indexes vs OR scan)
+      expect(duration).toBeLessThan(10); // Conservative threshold
+      
+      // Should be properly ordered by weight DESC
+      expect(edges[0].weight).toBeGreaterThanOrEqual(edges[1].weight);
+      
+      console.log(`getAllEdges retrieved ${edges.length} edges in ${duration.toFixed(2)}ms`);
+    });
+
+    test("getAllEdges deduplicates correctly", () => {
+      // Edge case: ensure no duplicates if somehow the same edge appears
+      store.createEdge("A", "B", MemoryRelationType.SUPPORTS);
+      store.createEdge("B", "A", MemoryRelationType.CONTRADICTS);
+      
+      const edges = store.getAllEdges("A");
+      
+      // Should find 2 distinct edges
+      expect(edges.length).toBe(2);
+      
+      // All IDs should be unique
+      const ids = edges.map(e => e.id);
+      const uniqueIds = new Set(ids);
+      expect(uniqueIds.size).toBe(ids.length);
+    });
+
+    test("getAllEdges with filters maintains correctness", () => {
+      const memId = "filtered";
+      
+      // Mix of relations and weights
+      store.createEdge(memId, "a", MemoryRelationType.SUPPORTS, { weight: 0.9 });
+      store.createEdge("b", memId, MemoryRelationType.SUPPORTS, { weight: 0.8 });
+      store.createEdge(memId, "c", MemoryRelationType.CONTRADICTS, { weight: 0.7 });
+      store.createEdge("d", memId, MemoryRelationType.DERIVED_FROM, { weight: 0.6 });
+      
+      // Filter by relation type
+      const supportEdges = store.getAllEdges(memId, {
+        relationTypes: [MemoryRelationType.SUPPORTS]
+      });
+      expect(supportEdges.length).toBe(2);
+      expect(supportEdges.every(e => e.relationType === MemoryRelationType.SUPPORTS)).toBe(true);
+      
+      // Filter by min weight
+      const highWeightEdges = store.getAllEdges(memId, {
+        minWeight: 0.75
+      });
+      expect(highWeightEdges.length).toBe(2); // 0.9 and 0.8
+      expect(highWeightEdges.every(e => e.weight >= 0.75)).toBe(true);
+    });
+
+    test("index redundancy removed (idx_edges_source)", () => {
+      // Verify that the redundant index was dropped
+      // Query the sqlite_master table to check index existence
+      const indices = (store as any).db
+        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memory_edges'")
+        .all() as { name: string }[];
+      
+      const indexNames = indices.map(i => i.name);
+      
+      // idx_edges_source should NOT exist (redundant with UNIQUE constraint)
+      expect(indexNames).not.toContain("idx_edges_source");
+      
+      // idx_edges_target should exist
+      expect(indexNames).toContain("idx_edges_target");
+      
+      console.log("Active indexes:", indexNames.join(", "));
+    });
+  });
 });

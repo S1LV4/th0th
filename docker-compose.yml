@@ -2,23 +2,45 @@
 # th0th - Docker Compose
 # ============================================
 # Services:
-#   api  - REST API (port 3333)
-#   mcp  - MCP stdio client (connects to api)
+#   postgres - PostgreSQL database (port 5432)
+#   api      - REST API (port 3333)
+#   mcp      - MCP stdio client (connects to api)
 #
 # Usage:
-#   docker compose up -d api        # API only
-#   docker compose up -d            # API + MCP
-#   docker compose logs -f          # Watch logs
+#   docker compose up -d postgres       # PostgreSQL only
+#   docker compose up -d api            # API + PostgreSQL
+#   docker compose up -d                # All services
+#   docker compose logs -f              # Watch logs
 #
 # MCP via Docker (Claude Desktop / OpenCode):
 #   docker compose run --rm -i mcp
+#
+# Build locally instead of pulling from DockerHub:
+#   docker compose up -d --build
 # ============================================
 
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: th0th-postgres
+    restart: unless-stopped
+    ports:
+      - "${TH0TH_POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: th0th
+      # Set POSTGRES_PASSWORD in .env before production deploys
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-th0th_password}
+      POSTGRES_DB: th0th
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U th0th"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
-    build:
-      context: .
-      target: api
+    image: ${TH0TH_API_IMAGE:-s1lv4/th0th:api-latest}
     container_name: th0th-api
     restart: unless-stopped
     ports:
@@ -28,26 +50,28 @@ services:
     environment:
       - NODE_ENV=production
       - TH0TH_API_PORT=3333
+      - DATABASE_URL=postgresql://th0th:${POSTGRES_PASSWORD:-th0th_password}@postgres:5432/th0th
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text:latest}
-      - OLLAMA_EMBEDDING_DIMENSIONS=${OLLAMA_EMBEDDING_DIMENSIONS:-768}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-bge-m3}
+      - OLLAMA_EMBEDDING_DIMENSIONS=${OLLAMA_EMBEDDING_DIMENSIONS:-1024}
       - RLM_LLM_ENABLED=${RLM_LLM_ENABLED:-false}
       - RLM_LLM_API_KEY=${RLM_LLM_API_KEY:-}
       - RLM_LLM_MODEL=${RLM_LLM_MODEL:-}
       - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3333/health"]
       interval: 30s
       timeout: 3s
-      start_period: 40s
+      start_period: 60s
       retries: 3
 
   mcp:
-    build:
-      context: .
-      target: mcp
+    image: ${TH0TH_MCP_IMAGE:-s1lv4/th0th:mcp-latest}
     container_name: th0th-mcp
     stdin_open: true
     environment:
@@ -58,5 +82,7 @@ services:
         condition: service_healthy
 
 volumes:
+  postgres-data:
+    driver: local
   th0th-data:
     driver: local

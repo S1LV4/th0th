@@ -3,9 +3,12 @@
  *
  * Indexes an entire project for optimized contextual search (ASYNC).
  * Creates embeddings and FTS5 indexes for all relevant files.
- * 
+ *
  * Returns a jobId immediately and processes indexing in background.
  * Use th0th_get_index_status(jobId) to check progress.
+ *
+ * Now powered by the 4-stage ETL Pipeline:
+ *   discover → parse → resolve → load
  */
 
 import { IToolHandler } from "@th0th-ai/shared";
@@ -13,6 +16,7 @@ import { ToolResponse } from "@th0th-ai/shared";
 import { ContextualSearchRLM } from "../services/search/contextual-search-rlm.js";
 import { logger } from "@th0th-ai/shared";
 import { indexJobTracker } from "../services/jobs/index-job-tracker.js";
+import { etlPipeline } from "../services/etl/pipeline.js";
 import path from "path";
 
 interface IndexProjectParams {
@@ -127,7 +131,12 @@ export class IndexProjectTool implements IToolHandler {
   }
 
   /**
-   * Executa indexação em background com progress updates
+   * Executa indexação em background usando o ETL Pipeline de 4 estágios.
+   *
+   * O pipeline substitui o monobloco contextualSearch.indexProject() anterior:
+   *   discover → parse → resolve → load
+   *
+   * Mantém compatibilidade: warmCache continua funcionando via contextualSearch.
    */
   private async executeIndexing(
     jobId: string,
@@ -142,7 +151,7 @@ export class IndexProjectTool implements IToolHandler {
     try {
       indexJobTracker.updateStatus(jobId, "running");
 
-      logger.info("Starting project indexing", {
+      logger.info("Starting project indexing via ETL Pipeline", {
         jobId,
         projectPath,
         projectId,
@@ -150,36 +159,30 @@ export class IndexProjectTool implements IToolHandler {
         warmCache,
       });
 
-      // Se forceReindex, limpa indexação anterior
-      if (forceReindex) {
-        await this.contextualSearch.clearProjectIndex(projectId);
-        logger.info("Cleared previous project index", {
-          jobId,
-          projectId,
-        });
-      }
-
-      // Index the project (contextualSearch already does internal progress logging)
-      const stats = await this.contextualSearch.indexProject(
-        projectPath,
+      // ETL Pipeline: discover → parse → resolve → load
+      // EventBus integration handles progress updates and WorkspaceManager status
+      const etlResult = await etlPipeline.run({
         projectId,
-        {
-          onProgress: (current, total) => {
-            indexJobTracker.updateProgress(jobId, current, total);
-          },
-        }
-      );
+        projectPath,
+        jobId,
+        forceReindex,
+      });
 
       const duration = Date.now() - startTime;
 
-      logger.info("Project indexing completed", {
+      logger.info("ETL Pipeline completed", {
         jobId,
         projectId,
         duration,
-        ...stats,
+        filesIndexed: etlResult.filesIndexed,
+        filesSkipped: etlResult.filesSkipped,
+        chunksIndexed: etlResult.chunksIndexed,
+        symbolsIndexed: etlResult.symbolsIndexed,
+        errors: etlResult.errors,
+        stageTimings: etlResult.stageTimings,
       });
 
-      // Warmup cache if requested
+      // Warmup semantic search cache if requested (unchanged from before)
       if (warmCache) {
         logger.info("Starting cache warmup", { jobId, projectId });
         const warmupStats = await this.contextualSearch.warmupCache(
@@ -187,18 +190,14 @@ export class IndexProjectTool implements IToolHandler {
           projectPath,
           warmupQueries
         );
-        logger.info("Cache warmup completed", {
-          jobId,
-          projectId,
-          ...warmupStats,
-        });
+        logger.info("Cache warmup completed", { jobId, projectId, ...warmupStats });
       }
 
-      // Marca job como completo
+      // Mark job complete
       indexJobTracker.setResult(jobId, {
-        filesIndexed: stats.filesIndexed,
-        chunksIndexed: stats.chunksIndexed,
-        errors: stats.errors || 0,
+        filesIndexed: etlResult.filesIndexed,
+        chunksIndexed: etlResult.chunksIndexed,
+        errors: etlResult.errors,
         duration,
       });
     } catch (error) {
