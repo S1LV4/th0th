@@ -6,17 +6,31 @@
  * GET /api/v1/project/index/status/:jobId - Consultar status de indexação
  */
 
-import { Elysia, t } from "elysia";
 import {
-  IndexProjectTool,
   GetIndexStatusTool,
-  getVectorStore,
-  workspaceManager,
   getMemoryRepository,
+  getVectorStore,
+  IndexProjectTool,
+  workspaceManager,
 } from "@th0th-ai/core";
+import { Elysia, t } from "elysia";
 
-const indexProjectTool = new IndexProjectTool();
-const getIndexStatusTool = new GetIndexStatusTool();
+let indexProjectTool: IndexProjectTool | null = null;
+let indexStatusTool: GetIndexStatusTool | null = null;
+
+function getIndexProjectTool(): IndexProjectTool {
+  if (!indexProjectTool) {
+    indexProjectTool = new IndexProjectTool();
+  }
+  return indexProjectTool;
+}
+
+function getIndexStatusTool(): GetIndexStatusTool {
+  if (!indexStatusTool) {
+    indexStatusTool = new GetIndexStatusTool();
+  }
+  return indexStatusTool;
+}
 
 export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
   .get(
@@ -51,7 +65,7 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
   .post(
     "/index",
     async ({ body }) => {
-      return await indexProjectTool.handle(body);
+      return await getIndexProjectTool().handle(body);
     },
     {
       body: t.Object({
@@ -119,7 +133,8 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
 
       if (clearMemories) {
         try {
-          result.memoriesDeleted = await getMemoryRepository().deleteByProject(projectId);
+          result.memoriesDeleted =
+            await getMemoryRepository().deleteByProject(projectId);
         } catch (e) {
           errors.push(`memories: ${(e as Error).message}`);
         }
@@ -154,7 +169,8 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
         clearSymbols: t.Optional(
           t.Boolean({
             default: true,
-            description: "Delete symbol graph (definitions, references, imports, centrality)",
+            description:
+              "Delete symbol graph (definitions, references, imports, centrality)",
           }),
         ),
         clearMemories: t.Optional(
@@ -176,7 +192,7 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
   .get(
     "/index/status/:jobId",
     async ({ params }) => {
-      return await getIndexStatusTool.handle({ jobId: params.jobId });
+      return await getIndexStatusTool().handle({ jobId: params.jobId });
     },
     {
       params: t.Object({
