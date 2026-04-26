@@ -15,6 +15,9 @@ import {
   workspaceManager,
 } from "@th0th-ai/core";
 import { Elysia, t } from "elysia";
+import fs from "fs/promises";
+import os from "os";
+import path from "path";
 
 let indexProjectTool: IndexProjectTool | null = null;
 let indexStatusTool: GetIndexStatusTool | null = null;
@@ -190,6 +193,74 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
         summary: "Reset / clean a project",
         description:
           "Delete all indexed data for a project: vector embeddings, symbol graph, and memories. Each scope can be toggled independently. Useful before a full reindex or to free space.",
+      },
+    },
+  )
+
+  .post(
+    "/upload-and-index",
+    async ({ body }) => {
+      // Normalize cross-platform separators then take basename for a safe slug
+      const rawBase = body.projectId ||
+        body.projectPath.replace(/\\/g, "/").split("/").filter(Boolean).pop() ||
+        "default";
+      const finalProjectId = rawBase.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 128);
+
+      const uploadRoot = process.env.TH0TH_UPLOAD_DIR || path.join(os.homedir(), ".rlm", "uploads");
+      const stagingDir = path.resolve(uploadRoot, finalProjectId);
+
+      // Clear stale files from previous uploads so deleted/renamed files don't linger
+      await fs.rm(stagingDir, { recursive: true, force: true });
+      await fs.mkdir(stagingDir, { recursive: true });
+
+      // Write files in bounded batches to avoid EMFILE on large uploads
+      const WRITE_BATCH = 20;
+      for (let i = 0; i < body.files.length; i += WRITE_BATCH) {
+        await Promise.all(
+          body.files.slice(i, i + WRITE_BATCH).map(async (file) => {
+            // Reject absolute paths and traversal sequences
+            if (path.isAbsolute(file.relativePath) || file.relativePath.includes("..")) {
+              throw new Error(`Invalid file path: ${file.relativePath}`);
+            }
+            const dest = path.resolve(stagingDir, file.relativePath.replace(/\//g, path.sep));
+            if (!dest.startsWith(stagingDir + path.sep)) {
+              throw new Error(`Path escapes staging directory: ${file.relativePath}`);
+            }
+            await fs.mkdir(path.dirname(dest), { recursive: true });
+            await fs.writeFile(dest, file.content, "utf-8");
+          }),
+        );
+      }
+
+      return await getIndexProjectTool().handle({
+        projectPath: stagingDir,
+        projectId: finalProjectId,
+        forceReindex: body.forceReindex,
+        warmCache: body.warmCache,
+        warmupQueries: body.warmupQueries,
+      });
+    },
+    {
+      body: t.Object({
+        projectPath: t.String({
+          description: "Original path on the client machine (used to derive projectId)",
+        }),
+        projectId: t.Optional(t.String()),
+        forceReindex: t.Optional(t.Boolean({ default: false })),
+        warmCache: t.Optional(t.Boolean({ default: false })),
+        warmupQueries: t.Optional(t.Array(t.String())),
+        files: t.Array(
+          t.Object({
+            relativePath: t.String(),
+            content: t.String(),
+          }),
+        ),
+      }),
+      detail: {
+        tags: ["project"],
+        summary: "Upload files and index (remote client)",
+        description:
+          "Receive project files from a remote MCP client, write them to a server-side staging directory, and kick off the ETL indexing pipeline.",
       },
     },
   )

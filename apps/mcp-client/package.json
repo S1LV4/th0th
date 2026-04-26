@@ -16,6 +16,7 @@
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
     "build": "bun build src/index.ts src/config-cli.ts --outdir=dist --target=bun",
+    "test": "bun test",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
@@ -23,6 +24,7 @@
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.9",
     "@types/node": "^22.10.5",
     "typescript": "^5.8.3"
   },

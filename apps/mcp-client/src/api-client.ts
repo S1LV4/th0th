@@ -26,16 +26,12 @@ export class ApiClient {
     this.maxRetries = config?.maxRetries || 2;
   }
 
-  /**
-   * POST request to Tools API
-   */
-  async post(endpoint: string, body: unknown): Promise<unknown> {
-    return this.request("POST", endpoint, body);
+  /** POST request to Tools API */
+  async post(endpoint: string, body: unknown, timeoutMs?: number): Promise<unknown> {
+    return this.request("POST", endpoint, body, timeoutMs);
   }
 
-  /**
-   * GET request to Tools API with optional query parameters
-   */
+  /** GET request to Tools API with optional query parameters */
   async get(endpoint: string, queryParams?: Record<string, unknown>): Promise<unknown> {
     let url = endpoint;
     if (queryParams && Object.keys(queryParams).length > 0) {
@@ -49,20 +45,19 @@ export class ApiClient {
     return this.request("GET", url);
   }
 
-  /**
-   * Generic HTTP request to Tools API
-   */
+  /** Generic HTTP request to Tools API */
   private async request(
     method: "GET" | "POST",
     endpoint: string,
     body?: unknown,
+    timeoutMs = this.timeoutMs,
   ): Promise<unknown> {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -105,6 +100,18 @@ export class ApiClient {
     }
 
     throw lastError || new Error("Unknown API error");
+  }
+
+  /** Upload local files and trigger indexing on the remote API */
+  uploadAndIndex(params: {
+    projectPath: string;
+    projectId?: string;
+    forceReindex?: boolean;
+    warmCache?: boolean;
+    warmupQueries?: string[];
+    files: Array<{ relativePath: string; content: string }>;
+  }): Promise<unknown> {
+    return this.post("/api/v1/project/upload-and-index", params, 300_000);
   }
 
   /**
