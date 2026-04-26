@@ -42,7 +42,7 @@ describe("authMiddleware", () => {
       const app = buildApp();
       const res = await app.handle(new Request("http://localhost/api/v1/protected"));
       expect(res.status).toBe(401);
-      const body = await res.json();
+      const body = await res.json() as { success: boolean };
       expect(body.success).toBe(false);
     });
 
@@ -64,7 +64,7 @@ describe("authMiddleware", () => {
         }),
       );
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await res.json() as { data: string };
       expect(body.data).toBe("secret");
     });
 
