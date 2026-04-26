@@ -12,8 +12,8 @@
  * - Batch operations with token limits
  */
 
-import { embed, embedMany } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { embed, embedMany, gateway, createGateway } from "ai";
+import { openai, createOpenAI } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
 import { cohere } from "@ai-sdk/cohere";
 import { mistral } from "@ai-sdk/mistral";
@@ -143,7 +143,10 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
     | "google"
     | "cohere"
     | "ollama"
-    | "mistral";
+    | "mistral"
+    | "vercel"
+    | "custom"
+    | "litellm";
   private readonly apiKey?: string;
   private readonly baseURL?: string;
   private readonly timeout: number;
@@ -161,7 +164,7 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
     this.id = providerId;
     this.model = config.model;
     this.dimensions = config.dimensions || 768; // Default to common dimension
-    this.providerType = config.provider as "openai" | "google" | "cohere" | "ollama" | "mistral";
+    this.providerType = config.provider as "openai" | "google" | "cohere" | "ollama" | "mistral" | "vercel" | "custom" | "litellm";
     this.apiKey = config.apiKey;
     this.baseURL = config.baseURL;
     this.timeout = config.timeout || 60000; // Default 60s
@@ -183,25 +186,60 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
     }
   }
 
-  /**
-   * Get AI SDK provider instance based on configuration
-   */
-  private getSDKProvider() {
+  private getEmbeddingModel(): any {
     switch (this.providerType) {
-      case "openai":
-        return openai;
+      case "vercel": {
+        const g =
+          this.baseURL || this.apiKey
+            ? createGateway({
+                baseURL: this.baseURL,
+                apiKey: this.apiKey,
+              })
+            : gateway;
+        return g.textEmbeddingModel(this.model);
+      }
+
+      case "litellm": {
+        if (!this.baseURL) {
+          throw new Error("LiteLLM provider requires LITELLM_BASE_URL");
+        }
+        const litellmDimensions = this.dimensions;
+        const litellmFetch = (async (url: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+          if (init?.body && typeof init.body === "string") {
+            const body = JSON.parse(init.body);
+            body.dimensions = litellmDimensions;
+            init = { ...init, body: JSON.stringify(body) };
+          }
+          return fetch(url, init);
+        }) as typeof fetch;
+        return createOpenAI({ baseURL: this.baseURL, apiKey: this.apiKey ?? "none", fetch: litellmFetch }).embedding(this.model);
+      }
+
+      case "custom": {
+        if (!this.baseURL) {
+          throw new Error("Custom provider requires CUSTOM_EMBEDDING_BASE_URL");
+        }
+        return createOpenAI({ baseURL: this.baseURL, apiKey: this.apiKey ?? "none" }).embedding(this.model);
+      }
+
+      case "openai": {
+        const p = this.baseURL
+          ? createOpenAI({ baseURL: this.baseURL, apiKey: this.apiKey })
+          : openai;
+        return p.embedding(this.model);
+      }
 
       case "google":
-        return google;
+        return google.embedding(this.model);
 
       case "cohere":
-        return cohere;
+        return cohere.embedding(this.model);
 
       case "mistral":
-        return mistral;
+        return mistral.embedding(this.model);
 
       case "ollama":
-        return ollama;
+        return ollama.embedding(this.model);
 
       default:
         throw new Error(`Unsupported provider: ${this.providerType}`);
@@ -226,27 +264,22 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
   }
 
   /**
-   * Truncate text to fit model context length
+   * Truncate text to fit model context length.
    *
-   * BGE-M3 has an 8192 token context window.
-   * With smart chunking, chunks are much smaller and more semantic,
-   * so we can afford a higher character limit.
-   *
-   * Token estimation: ~4 chars/token for English text, ~2-3 for code.
-   * 4000 chars ≈ 1000-2000 tokens, well within 8192 limit.
+   * Limit is resolved per-provider from config.maxChars (see embeddings/config.ts
+   * getMaxChars). Falls back to 4000 chars (bge-m3 safe default) when not set.
    */
   private truncateText(text: string): string {
-    const MAX_CHARS = 4000; // ~1000-2000 tokens, safe for 8192 token context
-    
+    const MAX_CHARS = this.config.maxChars ?? 4000;
+
     if (text.length <= MAX_CHARS) {
       return text;
     }
-    
-    // Truncate and add marker
+
     const truncated = text.substring(0, MAX_CHARS);
-    logger.warn(
+    logger.debug(
       `[${this.id}] Text truncated to fit context`,
-      { originalLength: text.length, maxChars: MAX_CHARS },
+      { originalLength: text.length, maxChars: MAX_CHARS, model: this.model },
     );
 
     return truncated;
@@ -355,11 +388,8 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
               }
 
               // Other providers: Use AI SDK
-              const provider = this.getSDKProvider();
-              const options = this.getProviderOptions();
-
               const { embedding } = await embed({
-                model: provider.embedding(this.model, options) as any,
+                model: this.getEmbeddingModel(),
                 value: text,
               });
 
@@ -557,11 +587,8 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
       () =>
         withRetry(
           async () => {
-            const provider = this.getSDKProvider();
-            const options = this.getProviderOptions();
-
             const { embeddings } = await embedMany({
-              model: provider.embedding(this.model, options) as any,
+              model: this.getEmbeddingModel(),
               values: texts,
             });
 
