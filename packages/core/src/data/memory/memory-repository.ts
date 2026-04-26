@@ -310,6 +310,17 @@ export class MemoryRepository {
     return this.db.prepare(sql).all(...params) as MemoryRow[];
   }
 
+  getById(id: string): MemoryRow | null {
+    return this.db
+      .prepare(
+        `SELECT id, content, type, level, importance, tags, embedding, metadata,
+                created_at, updated_at, access_count, last_accessed,
+                user_id, session_id, project_id, agent_id
+         FROM memories WHERE id = ?`,
+      )
+      .get(id) as MemoryRow | null;
+  }
+
   /**
    * Delete all memories belonging to a project.
    * Returns the number of rows deleted.

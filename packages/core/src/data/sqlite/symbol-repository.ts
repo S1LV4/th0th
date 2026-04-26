@@ -525,6 +525,48 @@ export class SymbolRepository {
     return (this.stmts.getWorkspace.get(projectId) as WorkspaceRow) ?? null;
   }
 
+  async getProjectMapAggregates(
+    projectId: string,
+    recentLimit: number = 10,
+  ): Promise<{
+    symbolsByKind: Record<string, number>;
+    filesByLanguage: Record<string, number>;
+    recentFiles: Array<{ filePath: string; indexedAt: number | null }>;
+  }> {
+    const kindRows = this.db
+      .prepare(
+        `SELECT kind, COUNT(*) AS count FROM symbol_definitions WHERE project_id = ? GROUP BY kind ORDER BY count DESC`,
+      )
+      .all(projectId) as Array<{ kind: string; count: number }>;
+
+    const fileRows = this.db
+      .prepare(`SELECT relative_path FROM symbol_files WHERE project_id = ?`)
+      .all(projectId) as Array<{ relative_path: string }>;
+
+    const recentRows = this.db
+      .prepare(
+        `SELECT relative_path, indexed_at FROM symbol_files WHERE project_id = ? ORDER BY indexed_at DESC LIMIT ?`,
+      )
+      .all(projectId, recentLimit) as Array<{ relative_path: string; indexed_at: number | null }>;
+
+    const symbolsByKind: Record<string, number> = {};
+    for (const row of kindRows) symbolsByKind[row.kind] = row.count;
+
+    const filesByLanguage: Record<string, number> = {};
+    for (const row of fileRows) {
+      const dot = row.relative_path.lastIndexOf(".");
+      const ext = dot >= 0 ? row.relative_path.slice(dot + 1).toLowerCase() : "other";
+      filesByLanguage[ext] = (filesByLanguage[ext] ?? 0) + 1;
+    }
+
+    const recentFiles = recentRows.map((r) => ({
+      filePath: r.relative_path,
+      indexedAt: r.indexed_at ?? null,
+    }));
+
+    return { symbolsByKind, filesByLanguage, recentFiles };
+  }
+
   listWorkspaces(): WorkspaceRow[] {
     return this.stmts.listWorkspaces.all() as WorkspaceRow[];
   }
