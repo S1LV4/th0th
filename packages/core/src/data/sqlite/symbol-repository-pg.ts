@@ -334,7 +334,7 @@ export class SymbolRepositoryPg {
     const p = getPrismaClient();
     await p.$executeRaw`
       INSERT INTO symbol_files (project_id, relative_path, content_hash, mtime, size, indexed_at, symbol_count, chunk_count)
-      VALUES (${file.project_id}, ${file.relative_path}, ${file.content_hash}, ${BigInt(file.mtime)}, ${file.size}, ${new Date(file.indexed_at)}, ${file.symbol_count}, ${file.chunk_count})
+      VALUES (${file.project_id}, ${file.relative_path}, ${file.content_hash}, ${BigInt(Math.trunc(file.mtime))}, ${file.size}, ${new Date(file.indexed_at)}, ${file.symbol_count}, ${file.chunk_count})
       ON CONFLICT (project_id, relative_path) DO UPDATE SET
         content_hash = EXCLUDED.content_hash,
         mtime        = EXCLUDED.mtime,
