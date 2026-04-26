@@ -16,6 +16,7 @@
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
     "build": "bun build src/index.ts src/config-cli.ts --outdir=dist --target=bun",
+    "test": "bun test",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

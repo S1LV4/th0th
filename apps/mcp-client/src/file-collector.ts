@@ -59,7 +59,8 @@ async function walk(
 
         const content = await fs.readFile(fullPath, "utf-8");
         state.totalBytes += stat.size;
-        files.push({ relativePath: path.relative(root, fullPath), content });
+        const relativePath = path.relative(root, fullPath).split(path.sep).join("/");
+        files.push({ relativePath, content });
       } catch {
         // skip unreadable files
       }

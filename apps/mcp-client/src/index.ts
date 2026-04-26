@@ -219,14 +219,12 @@ class McpProxyServer {
       return textContent(JSON.stringify({ success: false, error: "projectPath is required" }));
     }
 
-    // Path not accessible locally — let the server try it directly (server-side path)
     try {
-      const stat = await fs.stat(projectPath);
-      if (!stat.isDirectory()) throw new Error("not a directory");
+      if (!(await fs.stat(projectPath)).isDirectory()) {
+        return textContent(JSON.stringify({ success: false, error: `${projectPath} is not a directory` }));
+      }
     } catch {
-      const toolDef = getToolDefinition("th0th_index")!;
-      const response = await this.apiClient.post(toolDef.apiEndpoint, args);
-      return textContent(JSON.stringify(response, null, 2));
+      return textContent(JSON.stringify({ success: false, error: `Path not found: ${projectPath}` }));
     }
 
     console.error(`[th0th-mcp] Collecting files from ${projectPath}...`);

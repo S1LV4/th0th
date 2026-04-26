@@ -200,19 +200,37 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
   .post(
     "/upload-and-index",
     async ({ body }) => {
-      const finalProjectId = body.projectId || path.basename(body.projectPath) || "default";
-      const stagingDir = path.join(
-        process.env.TH0TH_UPLOAD_DIR || path.join(os.homedir(), ".rlm", "uploads"),
-        finalProjectId,
-      );
+      // Normalize cross-platform separators then take basename for a safe slug
+      const rawBase = body.projectId ||
+        body.projectPath.replace(/\\/g, "/").split("/").filter(Boolean).pop() ||
+        "default";
+      const finalProjectId = rawBase.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 128);
 
-      await Promise.all(
-        body.files.map(async (file) => {
-          const dest = path.join(stagingDir, file.relativePath);
-          await fs.mkdir(path.dirname(dest), { recursive: true });
-          await fs.writeFile(dest, file.content, "utf-8");
-        }),
-      );
+      const uploadRoot = process.env.TH0TH_UPLOAD_DIR || path.join(os.homedir(), ".rlm", "uploads");
+      const stagingDir = path.resolve(uploadRoot, finalProjectId);
+
+      // Clear stale files from previous uploads so deleted/renamed files don't linger
+      await fs.rm(stagingDir, { recursive: true, force: true });
+      await fs.mkdir(stagingDir, { recursive: true });
+
+      // Write files in bounded batches to avoid EMFILE on large uploads
+      const WRITE_BATCH = 20;
+      for (let i = 0; i < body.files.length; i += WRITE_BATCH) {
+        await Promise.all(
+          body.files.slice(i, i + WRITE_BATCH).map(async (file) => {
+            // Reject absolute paths and traversal sequences
+            if (path.isAbsolute(file.relativePath) || file.relativePath.includes("..")) {
+              throw new Error(`Invalid file path: ${file.relativePath}`);
+            }
+            const dest = path.resolve(stagingDir, file.relativePath.replace(/\//g, path.sep));
+            if (!dest.startsWith(stagingDir + path.sep)) {
+              throw new Error(`Path escapes staging directory: ${file.relativePath}`);
+            }
+            await fs.mkdir(path.dirname(dest), { recursive: true });
+            await fs.writeFile(dest, file.content, "utf-8");
+          }),
+        );
+      }
 
       return await getIndexProjectTool().handle({
         projectPath: stagingDir,

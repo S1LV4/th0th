@@ -2,6 +2,8 @@ import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
+
+const NONEXISTENT_DIR = path.join(os.tmpdir(), "__th0th_nonexistent_dir_xyz__");
 import { collectFiles } from "./file-collector.js";
 
 let tmpDir: string;
@@ -67,7 +69,7 @@ describe("collectFiles", () => {
   });
 
   it("returns empty array for non-existent directory", async () => {
-    const files = await collectFiles("/tmp/__th0th_nonexistent_dir_xyz__");
+    const files = await collectFiles(NONEXISTENT_DIR);
     expect(files).toEqual([]);
   });
 });
