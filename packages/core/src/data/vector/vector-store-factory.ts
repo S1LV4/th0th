@@ -90,12 +90,22 @@ function getConfigFromEnv(): VectorStoreConfig {
     (!explicitType && postgresUrl?.startsWith('postgresql'));
 
   if (isPostgres && postgresUrl) {
+    const hnswM = Number(process.env.POSTGRES_HNSW_M);
+    const hnswEfConstruction = Number(process.env.POSTGRES_HNSW_EF_CONSTRUCTION);
+    const ivfflatLists = Number(process.env.POSTGRES_IVFFLAT_LISTS);
+
+    const indexParams: { m?: number; efConstruction?: number; lists?: number } = {};
+    if (hnswM) indexParams.m = hnswM;
+    if (hnswEfConstruction) indexParams.efConstruction = hnswEfConstruction;
+    if (ivfflatLists) indexParams.lists = ivfflatLists;
+
     return {
       type: 'postgres',
       postgres: {
         connectionString: postgresUrl,
         poolSize: parseInt(process.env.POSTGRES_VECTOR_POOL_SIZE || '10'),
         indexType: (process.env.POSTGRES_VECTOR_INDEX as 'ivfflat' | 'hnsw') || 'hnsw',
+        ...(Object.keys(indexParams).length > 0 ? { indexParams } : {}),
       },
     };
   }

@@ -30,6 +30,18 @@ export interface LoadResult {
   errors: number;
 }
 
+/** Human-readable duration: "42s", "3m 12s", "1h 04m". */
+function formatDuration(ms: number): string {
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  if (totalSec < 60) return `${totalSec}s`;
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m < 60) return `${m}m ${s.toString().padStart(2, "0")}s`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${h}h ${mm.toString().padStart(2, "0")}m`;
+}
+
 export class LoadStage {
   private vectorStore: Awaited<ReturnType<typeof getVectorStore>> | null = null;
 
@@ -42,18 +54,29 @@ export class LoadStage {
 
   async run(ctx: EtlStageContext, files: ResolvedFile[]): Promise<LoadResult> {
     const t0 = performance.now();
+    const toLoadCount = files.filter((f) => f.file.needsReparse).length;
 
     ctx.emit({
       type: "stage_start",
       stage: "load",
-      payload: { total: files.length, toLoad: files.filter((f) => f.file.needsReparse).length },
+      payload: { total: files.length, toLoad: toLoadCount },
       timestamp: Date.now(),
     });
+
+    if (toLoadCount > 0) {
+      logger.info("ETL Load starting", {
+        projectId: ctx.projectId,
+        filesToLoad: toLoadCount,
+        filesSkipped: files.length - toLoadCount,
+      });
+    }
 
     let filesLoaded = 0;
     let chunksLoaded = 0;
     let symbolsLoaded = 0;
     let errors = 0;
+    let processedSinceStart = 0; // files that actually ran (not skipped) — for ETA rate
+    let lastEtaLogAt = 0;
 
     // Process in batches of 10 to avoid overwhelming the embedding service
     const BATCH = 10;
@@ -86,6 +109,7 @@ export class LoadStage {
             filesLoaded++;
             chunksLoaded += chunkCount;
             symbolsLoaded += symCount;
+            processedSinceStart++;
 
             ctx.emit({
               type: "file_processed",
@@ -100,6 +124,7 @@ export class LoadStage {
             });
           } catch (err) {
             errors++;
+            processedSinceStart++;
             ctx.emit({
               type: "file_error",
               stage: "load",
@@ -114,16 +139,50 @@ export class LoadStage {
         }),
       );
 
+      const current = Math.min(i + BATCH, files.length);
+      const elapsedMs = performance.now() - t0;
+      const remainingToLoad = Math.max(0, toLoadCount - processedSinceStart);
+      // Only compute ETA once we have a real sample and files left to process
+      const filesPerSec = processedSinceStart > 0 && elapsedMs > 0
+        ? (processedSinceStart / elapsedMs) * 1000
+        : 0;
+      const etaMs = filesPerSec > 0 && remainingToLoad > 0
+        ? Math.round(remainingToLoad / filesPerSec * 1000)
+        : 0;
+
       ctx.emit({
         type: "progress",
         stage: "load",
         payload: {
-          current: Math.min(i + BATCH, files.length),
+          current,
           total: files.length,
-          percentage: Math.round((Math.min(i + BATCH, files.length) / files.length) * 100),
+          percentage: Math.round((current / files.length) * 100),
+          processed: processedSinceStart,
+          toLoad: toLoadCount,
+          elapsedMs: Math.round(elapsedMs),
+          filesPerSec: Number(filesPerSec.toFixed(2)),
+          etaMs,
         },
         timestamp: Date.now(),
       });
+
+      // Throttle ETA log to at most every 5s so it stays informative, not spammy
+      if (
+        etaMs > 0 &&
+        processedSinceStart >= BATCH &&
+        elapsedMs - lastEtaLogAt >= 5000
+      ) {
+        lastEtaLogAt = elapsedMs;
+        logger.info("ETL Load progress", {
+          projectId: ctx.projectId,
+          processed: processedSinceStart,
+          toLoad: toLoadCount,
+          percentage: Math.round((processedSinceStart / toLoadCount) * 100),
+          filesPerSec: Number(filesPerSec.toFixed(2)),
+          eta: formatDuration(etaMs),
+          elapsed: formatDuration(elapsedMs),
+        });
+      }
     }
 
     const durationMs = Math.round(performance.now() - t0);
@@ -142,6 +201,10 @@ export class LoadStage {
       symbolsLoaded,
       errors,
       durationMs,
+      duration: formatDuration(durationMs),
+      filesPerSec: filesLoaded > 0 && durationMs > 0
+        ? Number(((filesLoaded / durationMs) * 1000).toFixed(2))
+        : 0,
     });
 
     return { filesLoaded, chunksLoaded, symbolsLoaded, errors };

@@ -50,7 +50,8 @@ export class PostgresVectorStore extends BaseVectorStore {
     this.config = {
       poolSize: 10,
       indexType: 'hnsw',
-      indexParams: { m: 16, efConstruction: 64, lists: 100 },
+      // efConstruction=128 is the pgvector-recommended value for high-dim vectors (4096d qwen3).
+      indexParams: { m: 16, efConstruction: 128, lists: 100 },
       ...config,
     };
   }
@@ -110,6 +111,11 @@ export class PostgresVectorStore extends BaseVectorStore {
         });
         await this.createFallbackTable(client, providerDimensions);
       }
+
+      // UX guard: warn if chunks exist in another dim table for some projects but
+      // the current dim table is empty — indicates an embedding-model change
+      // without reindex, which makes all semantic search return 0 results.
+      await this.detectOrphanedChunks(client, providerDimensions);
     } finally {
       client.release();
     }
@@ -126,6 +132,57 @@ export class PostgresVectorStore extends BaseVectorStore {
     });
 
     return pool;
+  }
+
+  /**
+   * Detect chunks indexed under a different dimension than the current provider.
+   *
+   * When the user changes EMBEDDING_PROVIDER or the embedding model, the new
+   * provider's dims may not match existing rows (which are stored in
+   * vector_documents_<oldDim>d). Search then silently hits an empty table for
+   * affected projects. We warn so the user knows a reindex is required.
+   */
+  private async detectOrphanedChunks(client: any, currentDim: number): Promise<void> {
+    try {
+      const { rows: dimTables } = await client.query(
+        `SELECT tablename FROM pg_tables
+         WHERE tablename ~ '^vector_documents_[0-9]+d$'
+           AND tablename <> $1`,
+        [this.tableName],
+      );
+      if (dimTables.length === 0) return;
+
+      // Check if the CURRENT dim table has any rows
+      const { rows: currentRows } = await client.query(
+        `SELECT COUNT(*)::int AS n FROM ${this.tableName}`,
+      );
+      const currentCount = currentRows[0]?.n ?? 0;
+
+      for (const { tablename } of dimTables) {
+        const { rows: projects } = await client.query(
+          `SELECT project_id, COUNT(*)::int AS n
+             FROM ${tablename}
+            WHERE project_id NOT IN (SELECT DISTINCT project_id FROM ${this.tableName})
+            GROUP BY project_id`,
+        );
+        if (projects.length === 0) continue;
+
+        const otherDim = tablename.match(/_([0-9]+)d$/)?.[1];
+        logger.warn(
+          `[vector] Orphaned chunks detected: ${tablename} has data for projects not in ${this.tableName}. ` +
+            `Embedding model likely changed from ${otherDim}d → ${currentDim}d. Reindex required.`,
+          {
+            currentTable: this.tableName,
+            currentCount,
+            orphanedTable: tablename,
+            affectedProjects: projects.map((p: any) => ({ projectId: p.project_id, chunks: p.n })),
+          },
+        );
+      }
+    } catch (err) {
+      // Detection is best-effort; don't fail initialization
+      logger.debug('[vector] Orphaned chunks detection failed', { error: (err as Error).message });
+    }
   }
 
   private async createFallbackTable(client: any, dimensions: number): Promise<void> {
@@ -174,7 +231,7 @@ export class PostgresVectorStore extends BaseVectorStore {
 
     if (this.config.indexType === 'hnsw') {
       const m = this.config.indexParams?.m ?? 16;
-      const efConstruction = this.config.indexParams?.efConstruction ?? 64;
+      const efConstruction = this.config.indexParams?.efConstruction ?? 128;
 
       await pool.query(`
         CREATE INDEX CONCURRENTLY IF NOT EXISTS ${indexName}
@@ -239,7 +296,7 @@ export class PostgresVectorStore extends BaseVectorStore {
     });
 
     const m = this.config.indexParams?.m ?? 16;
-    const efConstruction = this.config.indexParams?.efConstruction ?? 64;
+    const efConstruction = this.config.indexParams?.efConstruction ?? 128;
 
     await pool.query(`
       CREATE INDEX CONCURRENTLY IF NOT EXISTS ${bqIndexName}
@@ -294,18 +351,86 @@ export class PostgresVectorStore extends BaseVectorStore {
     }
   }
 
+  /**
+   * Insert documents, embedding them in sub-batches to avoid overwhelming
+   * the embedding backend. Each sub-batch is its own short transaction
+   * (matches SQLiteVectorStore semantics — partial progress survives an
+   * Ollama crash mid-file, instead of rolling back the whole file).
+   * Fails-open per-document when a whole sub-batch's embed call errors.
+   */
   async addDocuments(documents: VectorDocument[]): Promise<void> {
+    if (documents.length === 0) return;
     const pool = await this.ensureInitialized();
 
-    const contents = documents.map((d) => d.content);
-    const embeddings = await this.embedBatch(contents);
+    // Match SQLiteVectorStore: Ollama bge-m3 crashes on large batches (50+)
+    const EMBED_SUB_BATCH_SIZE = 8;
 
+    let totalInserted = 0;
+    let totalFailed = 0;
+
+    for (let i = 0; i < documents.length; i += EMBED_SUB_BATCH_SIZE) {
+      const subBatch = documents.slice(i, i + EMBED_SUB_BATCH_SIZE);
+
+      let embeddings: number[][] | null = null;
+      try {
+        embeddings = await this.embedBatch(subBatch.map((d) => d.content));
+      } catch (error) {
+        logger.warn('[postgres] Sub-batch embedding failed, falling back per-document', {
+          subBatchIndex: Math.floor(i / EMBED_SUB_BATCH_SIZE),
+          count: subBatch.length,
+          error: (error as Error).message,
+        });
+      }
+
+      if (embeddings) {
+        try {
+          await this.insertSubBatch(pool, subBatch, embeddings);
+          totalInserted += subBatch.length;
+          continue;
+        } catch (error) {
+          logger.warn('[postgres] Sub-batch insert failed, falling back per-document', {
+            subBatchIndex: Math.floor(i / EMBED_SUB_BATCH_SIZE),
+            count: subBatch.length,
+            error: (error as Error).message,
+          });
+        }
+      }
+
+      // Per-document fallback for this sub-batch
+      for (const doc of subBatch) {
+        try {
+          const embedding = await this.embedContent(doc.content);
+          await this.insertSubBatch(pool, [doc], [embedding]);
+          totalInserted++;
+        } catch (singleError) {
+          totalFailed++;
+          logger.warn('[postgres] Skipping document due to embedding/insert error', {
+            id: doc.id,
+            error: (singleError as Error).message,
+          });
+        }
+      }
+    }
+
+    logger.debug('[postgres] Batch documents added to vector store', {
+      inserted: totalInserted,
+      failed: totalFailed,
+      total: documents.length,
+    });
+  }
+
+  /** Insert a pre-embedded sub-batch inside a single short transaction. */
+  private async insertSubBatch(
+    pool: Pool,
+    subBatch: VectorDocument[],
+    embeddings: number[][],
+  ): Promise<void> {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      for (let i = 0; i < documents.length; i++) {
-        const doc = documents[i];
+      for (let i = 0; i < subBatch.length; i++) {
+        const doc = subBatch[i];
         const embedding = embeddings[i];
         const projectId = (doc.metadata?.projectId as string) || 'default';
 
