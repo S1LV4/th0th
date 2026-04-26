@@ -5,8 +5,8 @@
  * Prisma 7.7.0 + Bun ORM bug (isObjectEnumValue is not a function).
  */
 
-import { getPrismaClient } from "../../services/query/prisma-client.js";
 import { logger } from "@th0th-ai/shared";
+import { getPrismaClient } from "../../services/query/prisma-client.js";
 
 // ─── Domain types ────────────────────────────────────────────────────────────
 
@@ -236,8 +236,14 @@ export class SymbolRepositoryPg {
 
   // ─── Workspace operations ─────────────────────────────────────────────────
 
-  async upsertWorkspace(ws: Omit<WorkspaceRow, 'created_at' | 'updated_at'> & { created_at?: number }): Promise<void> {
-    const lastIndexedAt = ws.last_indexed_at ? new Date(ws.last_indexed_at) : null;
+  async upsertWorkspace(
+    ws: Omit<WorkspaceRow, "created_at" | "updated_at"> & {
+      created_at?: number;
+    },
+  ): Promise<void> {
+    const lastIndexedAt = ws.last_indexed_at
+      ? new Date(ws.last_indexed_at)
+      : null;
     const p = getPrismaClient();
     await p.$executeRaw`
       INSERT INTO workspaces (project_id, project_path, display_name, status, last_indexed_at, last_error, files_count, chunks_count, symbols_count, created_at, updated_at)
@@ -263,20 +269,29 @@ export class SymbolRepositoryPg {
   async updateWorkspaceStatus(
     projectId: string,
     status: WorkspaceStatus,
-    opts?: {
-      lastError?: string | null;
-      lastIndexedAt?: number;
-      filesCount?: number;
-      chunksCount?: number;
-      symbolsCount?: number;
-    } | string,
+    opts?:
+      | {
+          lastError?: string | null;
+          lastIndexedAt?: number;
+          filesCount?: number;
+          chunksCount?: number;
+          symbolsCount?: number;
+        }
+      | string,
   ): Promise<void> {
-    const lastError = typeof opts === 'string' ? opts : opts?.lastError ?? null;
-    const filesCount = typeof opts === 'object' ? opts?.filesCount : undefined;
-    const chunksCount = typeof opts === 'object' ? opts?.chunksCount : undefined;
-    const symbolsCount = typeof opts === 'object' ? opts?.symbolsCount : undefined;
-    const lastIndexedAt = typeof opts === 'object' && opts?.lastIndexedAt
-      ? new Date(opts.lastIndexedAt) : (status === 'indexed' ? new Date() : undefined);
+    const lastError =
+      typeof opts === "string" ? opts : (opts?.lastError ?? null);
+    const filesCount = typeof opts === "object" ? opts?.filesCount : undefined;
+    const chunksCount =
+      typeof opts === "object" ? opts?.chunksCount : undefined;
+    const symbolsCount =
+      typeof opts === "object" ? opts?.symbolsCount : undefined;
+    const lastIndexedAt =
+      typeof opts === "object" && opts?.lastIndexedAt
+        ? new Date(opts.lastIndexedAt)
+        : status === "indexed"
+          ? new Date()
+          : undefined;
 
     const p = getPrismaClient();
     await p.$executeRaw`
@@ -330,7 +345,10 @@ export class SymbolRepositoryPg {
     `;
   }
 
-  async getFile(projectId: string, relativePath: string): Promise<SymbolFileRow | null> {
+  async getFile(
+    projectId: string,
+    relativePath: string,
+  ): Promise<SymbolFileRow | null> {
     const p = getPrismaClient();
     const rows = await p.$queryRaw<FileRaw[]>`
       SELECT * FROM symbol_files WHERE project_id = ${projectId} AND relative_path = ${relativePath} LIMIT 1
@@ -357,7 +375,10 @@ export class SymbolRepositoryPg {
     `;
   }
 
-  async deleteDefinitionsByFile(projectId: string, filePath: string): Promise<number> {
+  async deleteDefinitionsByFile(
+    projectId: string,
+    filePath: string,
+  ): Promise<number> {
     const p = getPrismaClient();
     await p.$executeRaw`DELETE FROM symbol_definitions WHERE project_id = ${projectId} AND file_path = ${filePath}`;
     return 0; // count not needed by callers
@@ -376,7 +397,7 @@ export class SymbolRepositoryPg {
     const rows = await p.$queryRaw<DefRaw[]>`
       SELECT * FROM symbol_definitions
       WHERE project_id = ${projectId}
-        AND (${query ?? null}::text IS NULL OR name ILIKE ${'%' + (query ?? '') + '%'})
+        AND (${query ?? null}::text IS NULL OR name ILIKE ${"%" + (query ?? "") + "%"})
         AND (${kindList}::text[] IS NULL OR kind = ANY(${kindList}::text[]))
         AND (${exportedOnly ?? false} = false OR exported = true)
       ORDER BY name ASC
@@ -385,7 +406,10 @@ export class SymbolRepositoryPg {
     return rows.map(mapDef);
   }
 
-  async getDefinition(projectId: string, fqn: string): Promise<SymbolDefinition | null> {
+  async getDefinition(
+    projectId: string,
+    fqn: string,
+  ): Promise<SymbolDefinition | null> {
     const p = getPrismaClient();
     const rows = await p.$queryRaw<DefRaw[]>`
       SELECT * FROM symbol_definitions WHERE project_id = ${projectId} AND id = ${fqn} LIMIT 1
@@ -399,11 +423,14 @@ export class SymbolRepositoryPg {
     const p = getPrismaClient();
     await p.$executeRaw`
       INSERT INTO symbol_references (project_id, from_file, from_line, symbol_name, target_fqn, ref_kind)
-      VALUES (${ref.project_id}, ${ref.from_file}, ${ref.from_line}, ${ref.symbol_name}, ${ref.target_fqn ?? 'unknown'}, ${ref.ref_kind})
+      VALUES (${ref.project_id}, ${ref.from_file}, ${ref.from_line}, ${ref.symbol_name}, ${ref.target_fqn ?? "unknown"}, ${ref.ref_kind})
     `;
   }
 
-  async deleteReferencesByFile(projectId: string, filePath: string): Promise<number> {
+  async deleteReferencesByFile(
+    projectId: string,
+    filePath: string,
+  ): Promise<number> {
     const p = getPrismaClient();
     await p.$executeRaw`DELETE FROM symbol_references WHERE project_id = ${projectId} AND from_file = ${filePath}`;
     return 0;
@@ -419,7 +446,7 @@ export class SymbolRepositoryPg {
     const rows = await p.$queryRaw<RefRaw[]>`
       SELECT * FROM symbol_references
       WHERE project_id = ${projectId}
-        AND (symbol_name = ${symbolName} OR target_fqn LIKE ${'%' + suffix})
+        AND (symbol_name = ${symbolName} OR target_fqn LIKE ${"%" + suffix})
       ORDER BY from_file ASC, from_line ASC
       LIMIT ${limit}
     `;
@@ -436,13 +463,19 @@ export class SymbolRepositoryPg {
     `;
   }
 
-  async deleteImportsByFile(projectId: string, filePath: string): Promise<number> {
+  async deleteImportsByFile(
+    projectId: string,
+    filePath: string,
+  ): Promise<number> {
     const p = getPrismaClient();
     await p.$executeRaw`DELETE FROM symbol_imports WHERE project_id = ${projectId} AND from_file = ${filePath}`;
     return 0;
   }
 
-  async getImportsFrom(projectId: string, filePath: string): Promise<SymbolImport[]> {
+  async getImportsFrom(
+    projectId: string,
+    filePath: string,
+  ): Promise<SymbolImport[]> {
     const p = getPrismaClient();
     const rows = await p.$queryRaw<ImpRaw[]>`
       SELECT * FROM symbol_imports WHERE project_id = ${projectId} AND from_file = ${filePath}
@@ -463,12 +496,22 @@ export class SymbolRepositoryPg {
     `;
   }
 
-  async getTopCentralFiles(projectId: string, limit: number = 20): Promise<CentralityEntry[]> {
+  async getTopCentralFiles(
+    projectId: string,
+    limit: number = 20,
+  ): Promise<CentralityEntry[]> {
     const p = getPrismaClient();
-    const rows = await p.$queryRaw<{ project_id: string; file_path: string; score: number; updated_at: Date }[]>`
+    const rows = await p.$queryRaw<
+      {
+        project_id: string;
+        file_path: string;
+        score: number;
+        updated_at: Date;
+      }[]
+    >`
       SELECT * FROM symbol_centrality WHERE project_id = ${projectId} ORDER BY score DESC LIMIT ${limit}
     `;
-    return rows.map(r => ({
+    return rows.map((r) => ({
       project_id: r.project_id,
       file_path: r.file_path,
       score: Number(r.score),
@@ -652,11 +695,17 @@ export class SymbolRepositoryPg {
 
   // ── Query helpers ────────────────────────────────────────────────────────
 
-  async findDefinitionsByName(projectId: string, name: string): Promise<SymbolDefinition[]> {
+  async findDefinitionsByName(
+    projectId: string,
+    name: string,
+  ): Promise<SymbolDefinition[]> {
     return this.searchDefinitions(projectId, name);
   }
 
-  async findDefinitionByFqn(projectId: string, fqn: string): Promise<SymbolDefinition | null> {
+  async findDefinitionByFqn(
+    projectId: string,
+    fqn: string,
+  ): Promise<SymbolDefinition | null> {
     return this.getDefinition(projectId, fqn);
   }
 
@@ -679,12 +728,18 @@ export class SymbolRepositoryPg {
   }
 
   /** Imports originating from a specific file (alias for getImportsFrom). */
-  async findDependencies(projectId: string, fromFile: string): Promise<SymbolImport[]> {
+  async findDependencies(
+    projectId: string,
+    fromFile: string,
+  ): Promise<SymbolImport[]> {
     return this.getImportsFrom(projectId, fromFile);
   }
 
   /** References matching by target FQN. */
-  async findReferencesByFqn(projectId: string, fqn: string): Promise<SymbolReference[]> {
+  async findReferencesByFqn(
+    projectId: string,
+    fqn: string,
+  ): Promise<SymbolReference[]> {
     const p = getPrismaClient();
     const rows = await p.$queryRaw<RefRaw[]>`
       SELECT * FROM symbol_references
@@ -695,7 +750,10 @@ export class SymbolRepositoryPg {
   }
 
   /** References matching by symbol name. */
-  async findReferencesByName(projectId: string, symbolName: string): Promise<SymbolReference[]> {
+  async findReferencesByName(
+    projectId: string,
+    symbolName: string,
+  ): Promise<SymbolReference[]> {
     const p = getPrismaClient();
     const rows = await p.$queryRaw<RefRaw[]>`
       SELECT * FROM symbol_references
@@ -708,13 +766,27 @@ export class SymbolRepositoryPg {
   /** List definitions with filter options (mirrors SQLite SymbolRepository.listDefinitions). */
   async listDefinitions(
     projectId: string,
-    opts: { query?: string; kinds?: SymbolKind[]; exportedOnly?: boolean; limit?: number } = {},
+    opts: {
+      query?: string;
+      kinds?: SymbolKind[];
+      exportedOnly?: boolean;
+      limit?: number;
+    } = {},
   ): Promise<SymbolDefinition[]> {
-    return this.searchDefinitions(projectId, opts.query, opts.kinds, opts.exportedOnly, opts.limit ?? 100);
+    return this.searchDefinitions(
+      projectId,
+      opts.query,
+      opts.kinds,
+      opts.exportedOnly,
+      opts.limit ?? 100,
+    );
   }
 
   /** Batch-update centrality scores computed by PageRank. */
-  async updateCentrality(projectId: string, scores: Map<string, number>): Promise<void> {
+  async updateCentrality(
+    projectId: string,
+    scores: Map<string, number>,
+  ): Promise<void> {
     if (scores.size === 0) return;
     const p = getPrismaClient();
     const now = new Date();
@@ -731,6 +803,3 @@ export class SymbolRepositoryPg {
     });
   }
 }
-
-export const symbolRepositoryPg = SymbolRepositoryPg.getInstance();
-

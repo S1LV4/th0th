@@ -3,13 +3,12 @@
  * Fornece uma instância única do PrismaClient configurada com o adapter correto
  */
 
-import { PrismaClient } from "../../generated/prisma/index.js";
-import { config } from "@th0th-ai/shared";
+import { config, logger } from "@th0th-ai/shared";
 import path from "path";
-import { logger } from "@th0th-ai/shared";
+import { PrismaClient } from "../../generated/prisma/index.js";
 
 let prismaInstance: PrismaClient | null = null;
-let prismaPool: import('pg').Pool | null = null;
+let prismaPool: import("pg").Pool | null = null;
 
 /**
  * @internal
@@ -37,7 +36,7 @@ export function getPrismaClient(): PrismaClient {
     const databaseUrl = process.env.DATABASE_URL;
 
     // Check if using PostgreSQL or SQLite
-    const isPostgres = databaseUrl?.startsWith('postgres');
+    const isPostgres = databaseUrl?.startsWith("postgres");
 
     if (isPostgres) {
       let pool: import('pg').Pool;
@@ -51,8 +50,8 @@ export function getPrismaClient(): PrismaClient {
           idleTimeoutMillis: 30000,
           connectionTimeoutMillis: 5000,
         });
-        pool.on('error', (err) => {
-          logger.error('Unexpected PG pool error', err as Error);
+        pool.on("error", (err) => {
+          logger.error("Unexpected PG pool error", err as Error);
         });
         PrismaPg = adapterPg.PrismaPg;
       } catch (e) {
@@ -63,7 +62,7 @@ export function getPrismaClient(): PrismaClient {
       prismaPool = pool;
       const adapter = new PrismaPg(pool as any);
       prismaInstance = new PrismaClient({ adapter });
-      logger.info('Prisma Client initialized with PostgreSQL (pg adapter)');
+      logger.info("Prisma Client initialized with PostgreSQL (pg adapter)");
     } else {
       let PrismaBunSqlite: typeof import('prisma-adapter-bun-sqlite').PrismaBunSqlite;
       try {
@@ -83,7 +82,7 @@ export function getPrismaClient(): PrismaClient {
       });
 
       prismaInstance = new PrismaClient({ adapter });
-      logger.info('Prisma Client initialized with SQLite (Bun adapter)');
+      logger.info("Prisma Client initialized with SQLite (Bun adapter)");
     }
   }
 

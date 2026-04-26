@@ -37,7 +37,9 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
     async ({ query }) => {
       try {
         const status = (query.status as string) || "all";
-        const workspaces = await workspaceManager.listWorkspaces(status as "all");
+        const workspaces = await workspaceManager.listWorkspaces(
+          status as "all",
+        );
         return {
           success: true,
           data: {
@@ -65,7 +67,8 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
       detail: {
         tags: ["workspace"],
         summary: "List all indexed workspaces",
-        description: "Returns all registered projects with their indexing status and statistics.",
+        description:
+          "Returns all registered projects with their indexing status and statistics.",
       },
     },
   )
@@ -76,7 +79,10 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
       try {
         const workspace = await workspaceManager.getWorkspace(params.id);
         if (!workspace) {
-          return { success: false, error: `Workspace '${params.id}' not found` };
+          return {
+            success: false,
+            error: `Workspace '${params.id}' not found`,
+          };
         }
         return { success: true, data: workspace };
       } catch (error) {
@@ -122,7 +128,9 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
     },
     {
       body: t.Object({
-        projectPath: t.String({ description: "Absolute path to project directory" }),
+        projectPath: t.String({
+          description: "Absolute path to project directory",
+        }),
       }),
       detail: {
         tags: ["workspace"],
@@ -146,7 +154,8 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
           limit = "20",
         } = query as Record<string, string>;
 
-        if (!projectId) return { success: false, error: "projectId is required" };
+        if (!projectId)
+          return { success: false, error: "projectId is required" };
 
         const defs = await symbolGraphService.listDefinitions(projectId, {
           search,
@@ -156,7 +165,10 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
           limit: parseInt(limit, 10),
         });
 
-        return { success: true, data: { definitions: defs, total: defs.length } };
+        return {
+          success: true,
+          data: { definitions: defs, total: defs.length },
+        };
       } catch (error) {
         return { success: false, error: (error as Error).message };
       }
@@ -175,17 +187,32 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
     "/symbol/references",
     async ({ query }) => {
       try {
-        const { projectId, symbolName, fqn, limit = "50" } = query as Record<string, string>;
+        const {
+          projectId,
+          symbolName,
+          fqn,
+          limit = "50",
+        } = query as Record<string, string>;
 
-        if (!projectId) return { success: false, error: "projectId is required" };
-        if (!symbolName) return { success: false, error: "symbolName is required" };
+        if (!projectId)
+          return { success: false, error: "projectId is required" };
+        if (!symbolName)
+          return { success: false, error: "symbolName is required" };
 
-        const refs = await symbolGraphService.getReferences(projectId, symbolName, fqn);
+        const refs = await symbolGraphService.getReferences(
+          projectId,
+          symbolName,
+          fqn,
+        );
         const limited = refs.slice(0, parseInt(limit, 10));
 
         return {
           success: true,
-          data: { references: limited, total: refs.length, shown: limited.length },
+          data: {
+            references: limited,
+            total: refs.length,
+            shown: limited.length,
+          },
         };
       } catch (error) {
         return { success: false, error: (error as Error).message };
@@ -203,12 +230,21 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
     "/symbol/definition",
     async ({ query }) => {
       try {
-        const { projectId, symbolName, fromFile } = query as Record<string, string>;
+        const { projectId, symbolName, fromFile } = query as Record<
+          string,
+          string
+        >;
 
-        if (!projectId) return { success: false, error: "projectId is required" };
-        if (!symbolName) return { success: false, error: "symbolName is required" };
+        if (!projectId)
+          return { success: false, error: "projectId is required" };
+        if (!symbolName)
+          return { success: false, error: "symbolName is required" };
 
-        const defs = await symbolGraphService.goToDefinition(projectId, symbolName, fromFile);
+        const defs = await symbolGraphService.goToDefinition(
+          projectId,
+          symbolName,
+          fromFile,
+        );
 
         return {
           success: true,
@@ -276,7 +312,10 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
         }
 
         const limit = query.limit ? parseInt(query.limit as string, 10) : 20;
-        const files = await symbolGraphService.getTopCentralFiles(projectId, limit);
+        const files = await symbolGraphService.getTopCentralFiles(
+          projectId,
+          limit,
+        );
 
         return {
           success: true,
@@ -293,7 +332,8 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
       detail: {
         tags: ["symbol"],
         summary: "Get top central files",
-        description: "Returns files ranked by PageRank centrality for a project",
+        description:
+          "Returns files ranked by PageRank centrality for a project",
       },
     },
   )
@@ -302,18 +342,29 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
     "/symbol/snippet",
     async ({ query }) => {
       try {
-        const { projectId, file, lineStart = "1", lineEnd } = query as Record<string, string>;
+        const {
+          projectId,
+          file,
+          lineStart = "1",
+          lineEnd,
+        } = query as Record<string, string>;
 
-        if (!projectId) return { success: false, error: "projectId is required" };
+        if (!projectId)
+          return { success: false, error: "projectId is required" };
         if (!file) return { success: false, error: "file is required" };
 
         const workspace = await workspaceManager.getWorkspace(projectId);
         if (!workspace) {
-          return { success: false, error: `Workspace '${projectId}' not found` };
+          return {
+            success: false,
+            error: `Workspace '${projectId}' not found`,
+          };
         }
 
         const start = Math.max(1, parseInt(lineStart, 10));
-        const end = lineEnd ? Math.max(start, parseInt(lineEnd, 10)) : start + 20;
+        const end = lineEnd
+          ? Math.max(start, parseInt(lineEnd, 10))
+          : start + 20;
         const absolutePath = path.join(workspace.project_path, file);
         const content = await fs.readFile(absolutePath, "utf-8");
         const lines = content.split(/\r?\n/);
@@ -342,7 +393,8 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
       detail: {
         tags: ["symbol"],
         summary: "Get file snippet",
-        description: "Returns code lines for the specified file and line range in a workspace",
+        description:
+          "Returns code lines for the specified file and line range in a workspace",
       },
     },
   );

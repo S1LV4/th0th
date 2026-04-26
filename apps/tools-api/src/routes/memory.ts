@@ -6,17 +6,31 @@
  * POST /api/v1/memory/list   - Listar memórias (sem busca semântica)
  */
 
-import { Elysia, t } from "elysia";
-import {
-  StoreMemoryTool,
-  SearchMemoriesTool,
-  MemoryRepository,
-} from "@th0th-ai/core";
 import type { MemoryRow } from "@th0th-ai/core";
+import {
+  MemoryRepository,
+  SearchMemoriesTool,
+  StoreMemoryTool,
+} from "@th0th-ai/core";
 import { logger } from "@th0th-ai/shared";
+import { Elysia, t } from "elysia";
 
-const storeMemoryTool = new StoreMemoryTool();
-const searchMemoriesTool = new SearchMemoriesTool();
+let storeMemoryTool: StoreMemoryTool | null = null;
+let searchMemoriesTool: SearchMemoriesTool | null = null;
+
+function getStoreMemoryTool(): StoreMemoryTool {
+  if (!storeMemoryTool) {
+    storeMemoryTool = new StoreMemoryTool();
+  }
+  return storeMemoryTool;
+}
+
+function getSearchMemoriesTool(): SearchMemoriesTool {
+  if (!searchMemoriesTool) {
+    searchMemoriesTool = new SearchMemoriesTool();
+  }
+  return searchMemoriesTool;
+}
 
 /** Convert a raw MemoryRow into the same shape the search endpoint returns. */
 function formatRow(row: MemoryRow) {
@@ -44,11 +58,22 @@ export const memoryRoutes = new Elysia({ prefix: "/api/v1/memory" })
   .post(
     "/store",
     async ({ body }) => {
-      return await storeMemoryTool.handle(body);
+      try {
+        return await getStoreMemoryTool().handle(body);
+      } catch (error) {
+        logger.error("Failed to initialize StoreMemoryTool", error as Error);
+        return {
+          success: false,
+          error: `Memory service unavailable: ${(error as Error).message}`,
+        };
+      }
     },
     {
       body: t.Object({
-        content: t.String({ description: "Content to store in memory", maxLength: 100000 }),
+        content: t.String({
+          description: "Content to store in memory",
+          maxLength: 100000,
+        }),
         type: t.Union(
           [
             t.Literal("critical"),
@@ -83,7 +108,15 @@ export const memoryRoutes = new Elysia({ prefix: "/api/v1/memory" })
   .post(
     "/search",
     async ({ body }) => {
-      return await searchMemoriesTool.handle(body);
+      try {
+        return await getSearchMemoriesTool().handle(body);
+      } catch (error) {
+        logger.error("Failed to initialize SearchMemoriesTool", error as Error);
+        return {
+          success: false,
+          error: `Memory service unavailable: ${(error as Error).message}`,
+        };
+      }
     },
     {
       body: t.Object({

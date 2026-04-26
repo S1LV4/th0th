@@ -138,7 +138,8 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
 
       if (clearMemories) {
         try {
-          result.memoriesDeleted = await getMemoryRepository().deleteByProject(projectId);
+          result.memoriesDeleted =
+            await getMemoryRepository().deleteByProject(projectId);
         } catch (e) {
           errors.push(`memories: ${(e as Error).message}`);
         }
@@ -173,7 +174,8 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
         clearSymbols: t.Optional(
           t.Boolean({
             default: true,
-            description: "Delete symbol graph (definitions, references, imports, centrality)",
+            description:
+              "Delete symbol graph (definitions, references, imports, centrality)",
           }),
         ),
         clearMemories: t.Optional(

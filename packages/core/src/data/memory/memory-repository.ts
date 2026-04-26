@@ -6,10 +6,10 @@
  * No business logic — that lives in MemoryService and MemoryController.
  */
 
-import { Database } from "bun:sqlite";
 import { config, logger, MemoryLevel, MemoryType } from "@th0th-ai/shared";
-import path from "path";
+import { Database } from "bun:sqlite";
 import fs from "fs";
+import path from "path";
 
 // ── Row types ────────────────────────────────────────────────
 
@@ -107,9 +107,7 @@ export class MemoryRepository {
         const columns = this.db
           .prepare("PRAGMA table_info(memories)")
           .all() as any[];
-        const hasAgentId = columns.some(
-          (col: any) => col.name === "agent_id",
-        );
+        const hasAgentId = columns.some((col: any) => col.name === "agent_id");
         needsMigration = !hasAgentId;
       }
     } catch {
@@ -196,7 +194,13 @@ export class MemoryRepository {
       input.importance,
       JSON.stringify(input.tags),
       Buffer.from(new Float32Array(input.embedding).buffer),
-      JSON.stringify(input.metadata || { type: input.type, importance: input.importance, agentId: input.agentId }),
+      JSON.stringify(
+        input.metadata || {
+          type: input.type,
+          importance: input.importance,
+          agentId: input.agentId,
+        },
+      ),
       now,
       now,
     );
@@ -214,7 +218,25 @@ export class MemoryRepository {
    * Full-text search with dynamic filtering.
    * Returns raw rows (no scoring applied).
    */
-  fullTextSearch(query: string, filters: SearchFilters): MemoryRow[] {
+  fullTextSearch(
+    query: string,
+    limitOrFilters: number | SearchFilters,
+    maybeFilters?: Omit<SearchFilters, "limit" | "includePersistent">,
+  ): MemoryRow[] {
+    const filters: SearchFilters =
+      typeof limitOrFilters === "number"
+        ? {
+            userId: maybeFilters?.userId,
+            sessionId: maybeFilters?.sessionId,
+            projectId: maybeFilters?.projectId,
+            agentId: maybeFilters?.agentId,
+            types: maybeFilters?.types,
+            minImportance: maybeFilters?.minImportance ?? 0,
+            includePersistent: true,
+            limit: limitOrFilters,
+          }
+        : limitOrFilters;
+
     const conditions: string[] = [];
     const params: any[] = [];
 
@@ -234,9 +256,7 @@ export class MemoryRepository {
     }
 
     if (filters.types && filters.types.length > 0) {
-      conditions.push(
-        `m.type IN (${filters.types.map(() => "?").join(",")})`,
-      );
+      conditions.push(`m.type IN (${filters.types.map(() => "?").join(",")})`);
       params.push(...filters.types);
     }
 
@@ -247,9 +267,7 @@ export class MemoryRepository {
       conditions.push("m.session_id = ?");
       params.push(filters.sessionId);
     } else if (filters.includePersistent) {
-      conditions.push(
-        "(m.level <= ? OR (m.level = ? AND m.session_id = ?))",
-      );
+      conditions.push("(m.level <= ? OR (m.level = ? AND m.session_id = ?))");
       params.push(
         MemoryLevel.USER,
         MemoryLevel.SESSION,
@@ -335,5 +353,9 @@ export class MemoryRepository {
     });
 
     transaction(memoryIds);
+  }
+
+  incrementAccessCount(memoryId: string): void {
+    this.updateAccessCounts([memoryId]);
   }
 }

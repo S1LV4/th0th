@@ -1,10 +1,13 @@
-<img src="https://i.imgur.com/5EJK9OF.png" alt="th0th" style="visibility: visible; max-width: 60%; display: block; margin: 0 auto;" />
+<img src="https://i.imgur.com/WP7ivBc.png" alt="th0th" style="visibility: visible; max-width: 60%; display: block; margin: 0 auto;" />
 
 # th0th
 
 **Ancient knowledge keeper for modern code**
 
 Semantic search with 98% token reduction for AI assistants.
+
+Como reduzi 98% do uso de contexto (e custos) de IA no meu workflow / How I reduced AI context usage (and costs) by 98% in my workflow
+https://www.tabnews.com.br/S1LV4/como-reduzi-em-98-por-cento-o-uso-de-contexto-e-os-custos-de-ia-no-meu-workflow
 
 ---
 
@@ -69,11 +72,14 @@ File: `~/.config/opencode/opencode.json`
 
 ```json
 {
-  "mcpServers": {
+  "mcp": {
     "th0th": {
       "type": "local",
-        "command": ["bunx", "@th0th-ai/mcp-client"],
-      "env": {
+      "command": [
+        "bunx",
+        "@th0th-ai/mcp-client"
+      ],
+      "environment": {
         "TH0TH_API_URL": "http://localhost:3333"
       },
       "enabled": true
