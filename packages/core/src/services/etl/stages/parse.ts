@@ -25,6 +25,14 @@ import type {
 
 const BATCH_SIZE = 20;
 
+function resolveChunkerMaxChars(): number | undefined {
+  const providerLimit =
+    Number(process.env.OLLAMA_EMBEDDING_MAX_CHARS) ||
+    Number(process.env.EMBEDDING_MAX_CHARS);
+  if (!providerLimit) return undefined;
+  return Math.floor(providerLimit * 0.9);
+}
+
 export class ParseStage {
   async run(ctx: EtlStageContext, files: DiscoveredFile[]): Promise<ParsedFile[]> {
     const t0 = performance.now();
@@ -88,7 +96,12 @@ export class ParseStage {
       const content = await fs.readFile(file.absolutePath, "utf-8");
       const ext = path.extname(file.relativePath).toLowerCase();
 
-      const chunks = smartChunk(content, file.relativePath);
+      const chunkerMaxChars = resolveChunkerMaxChars();
+      const chunks = smartChunk(
+        content,
+        file.relativePath,
+        chunkerMaxChars ? { maxChunkChars: chunkerMaxChars } : {},
+      );
       const symbols = this.extractSymbols(content, ext);
       const rawImports = this.extractImports(content, ext);
 

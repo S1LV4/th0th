@@ -26,6 +26,21 @@ export const DEFAULT_IGNORES = [
   "**/generated/**",
   "**/*.generated.*",
   "**/*.d.ts",
+  // Tests and benchmarks: usually noise for code search (test fixtures often
+  // contain query keywords verbatim, polluting recall of the real
+  // implementation). Opt back in per-search via the `include` filter.
+  "**/__tests__/**",
+  "**/tests/**",
+  "**/*.test.ts",
+  "**/*.test.tsx",
+  "**/*.test.js",
+  "**/*.test.jsx",
+  "**/*.spec.ts",
+  "**/*.spec.tsx",
+  "**/*.spec.js",
+  "**/*.spec.jsx",
+  "**/benchmarks/**",
+  "**/fixtures/**",
   "**/*.wasm*",
   "**/*.min.*",
   "**/*.map",
