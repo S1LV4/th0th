@@ -1,6 +1,6 @@
 {
   "name": "@th0th-ai/tools-api",
-  "version": "1.0.3",
+  "version": "1.1.2",
   "author": "S1LV4",
   "description": "th0th REST API server - Semantic code search, memory, and context compression",
   "type": "module",
