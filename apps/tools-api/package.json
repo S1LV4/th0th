@@ -12,8 +12,10 @@
     "dist"
   ],
   "scripts": {
-    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 bun --watch src/index.ts",
-    "start": "NODE_TLS_REJECT_UNAUTHORIZED=0 bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "dev:insecure": "NODE_TLS_REJECT_UNAUTHORIZED=0 bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "start:insecure": "NODE_TLS_REJECT_UNAUTHORIZED=0 bun src/index.ts",
     "build": "bun build src/index.ts --outdir=dist --target=bun --external prisma-adapter-bun-sqlite --external pg --external @prisma/adapter-pg",
     "type-check": "tsc --noEmit"
   },

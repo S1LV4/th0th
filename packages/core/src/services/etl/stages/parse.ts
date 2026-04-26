@@ -26,11 +26,16 @@ import type {
 const BATCH_SIZE = 20;
 
 function resolveChunkerMaxChars(): number | undefined {
-  const providerLimit =
-    Number(process.env.OLLAMA_EMBEDDING_MAX_CHARS) ||
-    Number(process.env.EMBEDDING_MAX_CHARS);
-  if (!providerLimit) return undefined;
-  return Math.floor(providerLimit * 0.9);
+  // Global override takes highest precedence
+  const global = Number(process.env.EMBEDDING_MAX_CHARS);
+  if (Number.isFinite(global) && global > 0) return Math.floor(global * 0.9);
+
+  // Provider-specific override (OLLAMA_, VERCEL_, LITELLM_, CUSTOM_, GOOGLE_, MISTRAL_, …)
+  const provider = (process.env.EMBEDDING_PROVIDER || "ollama").toUpperCase();
+  const providerVal = Number(process.env[`${provider}_EMBEDDING_MAX_CHARS`]);
+  if (Number.isFinite(providerVal) && providerVal > 0) return Math.floor(providerVal * 0.9);
+
+  return undefined; // fall back to DEFAULT_CONFIG.maxChunkChars in smart-chunker
 }
 
 export class ParseStage {

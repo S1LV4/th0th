@@ -148,19 +148,19 @@ echo "Functional: fixed snippet survives piped/EOF stdin"
 FIXED_SNIPPET='
 set -e
 DB_CHOICE=""
-read -rp "" DB_CHOICE </>/dev/tty || true
+read -rp "" DB_CHOICE </dev/tty || true
 DB_CHOICE=${DB_CHOICE:-1}
 echo "DB_CHOICE=$DB_CHOICE"
 '
 assert_exit_zero \
-    "fixed read with </>/dev/tty || true exits 0 on EOF stdin" \
+    "fixed read with </dev/tty || true exits 0 on EOF stdin" \
     bash -c "$FIXED_SNIPPET"
 
 # Test 8: DB_CHOICE defaults to "1" when no input is provided (EOF stdin)
 RESULT=$(bash -c '
 set -e
 DB_CHOICE=""
-read -rp "" DB_CHOICE </>/dev/tty || true
+read -rp "" DB_CHOICE </dev/tty || true
 DB_CHOICE=${DB_CHOICE:-1}
 echo "$DB_CHOICE"
 ' < /dev/null 2>/dev/null || echo "ERROR")
@@ -170,18 +170,18 @@ assert_eq "DB_CHOICE defaults to '1' on EOF stdin" "$RESULT" "1"
 DATABASE_URL_SNIPPET='
 set -e
 DATABASE_URL=""
-read -rp "" DATABASE_URL </>/dev/tty || true
+read -rp "" DATABASE_URL </dev/tty || true
 echo "DATABASE_URL=${DATABASE_URL}"
 '
 assert_exit_zero \
-    "DATABASE_URL prompt with </>/dev/tty || true exits 0 on EOF stdin" \
+    "DATABASE_URL prompt with </dev/tty || true exits 0 on EOF stdin" \
     bash -c "$DATABASE_URL_SNIPPET"
 
 # Test 10: DATABASE_URL is empty (not crashing) when stdin is piped
 URL_RESULT=$(bash -c '
 set -e
 DATABASE_URL=""
-read -rp "" DATABASE_URL </>/dev/tty || true
+read -rp "" DATABASE_URL </dev/tty || true
 echo "$DATABASE_URL"
 ' < /dev/null 2>/dev/null || echo "ERROR")
 assert_eq "DATABASE_URL is empty string on EOF stdin (no crash)" "$URL_RESULT" ""

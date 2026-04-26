@@ -117,8 +117,20 @@ export class SearchSessionHook {
 
   private pruneDedup(now: number): void {
     if (this.recentKeys.size <= MAX_DEDUP_ENTRIES) return;
+
+    // First pass: remove expired entries
     for (const [k, ts] of this.recentKeys) {
       if (now - ts > DEDUP_TTL_MS) this.recentKeys.delete(k);
+    }
+
+    // Hard cap: if still over limit, evict oldest entries (insertion order)
+    if (this.recentKeys.size > MAX_DEDUP_ENTRIES) {
+      const excess = this.recentKeys.size - MAX_DEDUP_ENTRIES;
+      let evicted = 0;
+      for (const k of this.recentKeys.keys()) {
+        this.recentKeys.delete(k);
+        if (++evicted >= excess) break;
+      }
     }
   }
 }

@@ -113,8 +113,14 @@ export function smartChunk(
       break;
   }
 
-  // Post-processing: merge tiny chunks, split oversized ones
-  chunks = postProcess(chunks, cfg);
+  // Post-processing: merge tiny chunks, split oversized ones.
+  // Reserve ~250 chars for the file/label context header that is prepended
+  // afterwards so the final chunk never exceeds cfg.maxChunkChars.
+  const HEADER_BUDGET = 250;
+  const postCfg = cfg.maxChunkChars > HEADER_BUDGET
+    ? { ...cfg, maxChunkChars: cfg.maxChunkChars - HEADER_BUDGET }
+    : cfg;
+  chunks = postProcess(chunks, postCfg);
 
   // Add file context prefix for better embedding quality.
   //

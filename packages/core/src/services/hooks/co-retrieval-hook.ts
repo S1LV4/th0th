@@ -94,8 +94,8 @@ export class CoRetrievalHook {
   private async handleMemoryStored(
     payload: EventMap["memory:session-stored"],
   ): Promise<void> {
-    // Feature flag — off by default until value is validated
-    if (!process.env.TH0TH_CO_RETRIEVAL_HOOK) return;
+    // Feature flag — opt-in only; any value other than "true" keeps it off
+    if (process.env.TH0TH_CO_RETRIEVAL_HOOK !== "true") return;
 
     const { memoryId, projectId, sessionId } = payload;
 

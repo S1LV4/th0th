@@ -91,6 +91,10 @@ export class SearchProjectTool implements IToolHandler {
         description: "Output format (json or toon)",
         default: "toon",
       },
+      sessionId: {
+        type: "string",
+        description: "Session ID for search hook scoping (enables session memory persistence)",
+      },
     },
     required: ["query", "projectId"],
   };
