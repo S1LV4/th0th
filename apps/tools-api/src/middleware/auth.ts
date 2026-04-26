@@ -10,6 +10,7 @@ import { Elysia } from "elysia";
 const PUBLIC_PATHS = ["/health", "/swagger", "/swagger/json"];
 
 export const authMiddleware = new Elysia({ name: "auth" }).onBeforeHandle(
+  { as: "global" },
   ({ headers, path, set }) => {
     // Skip auth for public routes
     if (PUBLIC_PATHS.some((p) => path.startsWith(p))) {

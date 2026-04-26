@@ -55,6 +55,17 @@ const app = new Elysia({ adapter: node() })
           { name: "events", description: "SSE for real-time indexing progress" },
           { name: "file", description: "Optimized file reading with automatic compression" },
         ],
+        components: {
+          securitySchemes: {
+            ApiKeyAuth: {
+              type: "apiKey",
+              in: "header",
+              name: "x-api-key",
+              description: "API key — set TH0TH_API_KEY on the server. Omit when running locally without a key configured.",
+            },
+          },
+        },
+        security: [{ ApiKeyAuth: [] }],
       },
     }),
   )
