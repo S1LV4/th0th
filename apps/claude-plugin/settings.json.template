@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_description": "th0th plugin settings template. Merge into your user or project settings.json.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "th0th-session-hint"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "mcp__th0th__th0th_list_projects",
+      "mcp__th0th__th0th_project_map",
+      "mcp__th0th__th0th_index_status",
+      "mcp__th0th__th0th_analytics",
+      "mcp__th0th__th0th_search",
+      "mcp__th0th__th0th_search_definitions",
+      "mcp__th0th__th0th_go_to_definition",
+      "mcp__th0th__th0th_get_references"
+    ]
+  }
+}

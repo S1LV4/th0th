@@ -115,16 +115,16 @@ export const defaultConfig: ServerConfig = {
 
   cache: {
     l1: {
-      maxSize: 100 * 1024 * 1024, // 100 MB
-      defaultTTL: 300, // 5 minutes
+      maxSize: Number(process.env.L1_CACHE_MAX_SIZE) || 100 * 1024 * 1024,
+      defaultTTL: Number(process.env.L1_CACHE_TTL) || 300,
     },
     l2: {
-      dbPath: path.join(getGlobalDataDir(), "cache.db"),
-      maxSize: 500 * 1024 * 1024, // 500 MB
-      defaultTTL: 3600, // 1 hour
+      dbPath: process.env.CACHE_DB_PATH || path.join(getGlobalDataDir(), "cache.db"),
+      maxSize: Number(process.env.L2_CACHE_MAX_SIZE) || 500 * 1024 * 1024,
+      defaultTTL: Number(process.env.L2_CACHE_TTL) || 3600,
     },
     embedding: {
-      dbPath: path.join(getGlobalDataDir(), "embedding-cache.db"),
+      dbPath: process.env.EMBEDDING_CACHE_DB_PATH || path.join(getGlobalDataDir(), "embedding-cache.db"),
       maxAgeHours: 168, // 7 days
     },
   },
@@ -143,8 +143,8 @@ export const defaultConfig: ServerConfig = {
 
   compression: {
     defaultStrategy: "code_structure",
-    minTokensForCompression: 100,
-    targetCompressionRatio: 0.7, // 70% reduction
+    minTokensForCompression: Number(process.env.MIN_TOKENS_FOR_COMPRESSION) || 100,
+    targetCompressionRatio: Number(process.env.TARGET_COMPRESSION_RATIO) || 0.7,
     llm: {
       enabled: process.env.RLM_LLM_ENABLED === "true",
       baseUrl: process.env.RLM_LLM_BASE_URL || "https://api.openai.com/v1",
@@ -158,13 +158,13 @@ export const defaultConfig: ServerConfig = {
   },
 
   rateLimit: {
-    requestsPerMinute: 60,
-    tokensPerMinute: 100000,
+    requestsPerMinute: Number(process.env.REQUESTS_PER_MINUTE) || 60,
+    tokensPerMinute: Number(process.env.TOKENS_PER_MINUTE) || 100000,
   },
 
   security: {
-    maxInputLength: 100000,
-    sanitizeInputs: true,
+    maxInputLength: Number(process.env.MAX_INPUT_LENGTH) || 100000,
+    sanitizeInputs: process.env.SANITIZE_INPUTS !== "false",
     maxIndexSize: 100000, // max files to index
     maxFileSize: 1024 * 1024, // 1MB per file
     allowedExtensions: [
@@ -192,6 +192,7 @@ export const defaultConfig: ServerConfig = {
       "build/**",
       ".next/**",
       "coverage/**",
+      "**/generated/**",
       "*.min.js",
       "*.min.css",
     ],

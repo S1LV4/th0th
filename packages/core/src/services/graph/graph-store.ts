@@ -307,13 +307,34 @@ export class GraphStore {
   }
 
   /**
-   * Update edge weight.
+   * Update edge weight (set).
    */
   updateWeight(edgeId: string, weight: number): boolean {
     const clamped = Math.max(0, Math.min(1, weight));
     const result = this.db
       .prepare("UPDATE memory_edges SET weight = ? WHERE id = ?")
       .run(clamped, edgeId);
+    return (result as any).changes > 0;
+  }
+
+  /**
+   * Atomically increment edge weight by delta, capped at maxWeight.
+   * Safer than read-modify-write for the reinforcement pattern.
+   */
+  incrementEdgeWeight(
+    sourceId: string,
+    targetId: string,
+    relationType: MemoryRelationType,
+    delta: number,
+    maxWeight = 1.0,
+  ): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE memory_edges
+         SET weight = MIN(weight + ?, ?)
+         WHERE source_id = ? AND target_id = ? AND relation_type = ?`,
+      )
+      .run(delta, maxWeight, sourceId, targetId, relationType);
     return (result as any).changes > 0;
   }
 

@@ -39,6 +39,7 @@ yarn-error.log*
 *.swo
 *~
 .DS_Store
+.claude/
 
 # Testing
 coverage/

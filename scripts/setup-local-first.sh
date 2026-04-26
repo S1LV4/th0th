@@ -115,7 +115,7 @@ echo -e "  Choose your database backend:"
 echo -e "    ${BLUE}1)${NC} SQLite (default, zero-config, local-first)"
 echo -e "    ${BLUE}2)${NC} PostgreSQL + pgvector (better performance for large datasets)"
 echo ""
-read -p "  Enter your choice [1]: " DB_CHOICE
+read -rp "  Enter your choice [1]: " DB_CHOICE </>/dev/tty || true
 DB_CHOICE=${DB_CHOICE:-1}
 
 USE_POSTGRES=false
@@ -179,7 +179,7 @@ if [ "$DB_CHOICE" = "2" ]; then
         echo -e "  ${GREEN}✓${NC} Database URL: ${DATABASE_URL}"
     else
         echo -e "  ${YELLOW}⚠${NC} Docker not found. Please provide PostgreSQL connection URL:"
-        read -p "  DATABASE_URL: " DATABASE_URL
+        read -rp "  DATABASE_URL: " DATABASE_URL </>/dev/tty || true
         
         if [ -z "$DATABASE_URL" ]; then
             echo -e "  ${RED}✗${NC} No DATABASE_URL provided. Falling back to SQLite."

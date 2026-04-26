@@ -22,7 +22,7 @@
     "start:mcp": "bun run --filter @th0th-ai/mcp-client start",
     "type-check": "turbo run type-check",
     "test": "turbo run test",
-    "bench:fixture:sicad": "bun run --filter @th0th-ai/core bench:fixture:sicad",
+    "bench:fixture": "bun run --filter @th0th-ai/core bench:fixture:th0th",
     "bench:beir": "bun run --filter @th0th-ai/core bench:beir",
     "lint": "turbo run lint",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist",
