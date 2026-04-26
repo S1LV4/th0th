@@ -5,6 +5,7 @@
 // Search
 export { ContextualSearchRLM } from "./search/contextual-search-rlm.js";
 export { SearchCache } from "./search/search-cache.js";
+export { getSearchCache } from "./search/cache-factory.js";
 export { SearchAnalytics } from "./search/search-analytics.js";
 export { SearchCacheWarmup } from "./search/search-warmup.js";
 export { IndexManager } from "./search/index-manager.js";
@@ -95,6 +96,10 @@ export type {
 // Events
 export { eventBus, EventBus } from "./events/event-bus.js";
 export type { EventMap, EventName } from "./events/event-bus.js";
+
+// Hooks
+export { SearchSessionHook, searchSessionHook } from "./hooks/search-session-hook.js";
+export { CoRetrievalHook, coRetrievalHook } from "./hooks/co-retrieval-hook.js";
 
 // Metrics (token savings observability)
 export { TokenMetrics } from "./metrics/token-metrics.js";

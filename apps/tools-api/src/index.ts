@@ -25,7 +25,7 @@ import { workspaceRoutes } from "./routes/workspace.js";
 import { fileRoutes } from "./routes/file.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error.js";
-import { getHealthChecker } from "@th0th-ai/core";
+import { getHealthChecker, searchSessionHook, coRetrievalHook } from "@th0th-ai/core";
 
 const PORT = process.env.TH0TH_API_PORT || 3333;
 
@@ -76,6 +76,9 @@ const app = new Elysia({ adapter: node() })
     timestamp: new Date().toISOString(),
   }))
   .listen(PORT);
+
+searchSessionHook.register();
+coRetrievalHook.register(); // active only when TH0TH_CO_RETRIEVAL_HOOK=true
 
 console.log(`th0th Tools API running at http://localhost:${PORT}`);
 console.log(`Swagger docs at http://localhost:${PORT}/swagger`);

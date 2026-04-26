@@ -6,17 +6,32 @@
  * GET /api/v1/project/index/status/:jobId - Consultar status de indexação
  */
 
-import { Elysia, t } from "elysia";
 import {
-  IndexProjectTool,
   GetIndexStatusTool,
+  IndexProjectTool,
+  getMemoryRepository,
+  getSearchCache,
   getVectorStore,
   workspaceManager,
-  getMemoryRepository,
 } from "@th0th-ai/core";
+import { Elysia, t } from "elysia";
 
-const indexProjectTool = new IndexProjectTool();
-const getIndexStatusTool = new GetIndexStatusTool();
+let indexProjectTool: IndexProjectTool | null = null;
+let indexStatusTool: GetIndexStatusTool | null = null;
+
+function getIndexProjectTool(): IndexProjectTool {
+  if (!indexProjectTool) {
+    indexProjectTool = new IndexProjectTool();
+  }
+  return indexProjectTool;
+}
+
+function getIndexStatusTool(): GetIndexStatusTool {
+  if (!indexStatusTool) {
+    indexStatusTool = new GetIndexStatusTool();
+  }
+  return indexStatusTool;
+}
 
 export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
   .get(
@@ -51,7 +66,7 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
   .post(
     "/index",
     async ({ body }) => {
-      return await indexProjectTool.handle(body);
+      return await getIndexProjectTool().handle(body);
     },
     {
       body: t.Object({
@@ -102,6 +117,10 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
         try {
           const vectorStore = await getVectorStore();
           result.vectorsDeleted = await vectorStore.deleteByProject(projectId);
+          // Invalidate the in-process search cache (L1 + L2). Without this,
+          // queries served from L1 keep returning stale chunk metadata
+          // (file/lineStart/lineEnd) until the process restarts.
+          await getSearchCache().invalidateProject(projectId);
         } catch (e) {
           errors.push(`vectors: ${(e as Error).message}`);
         }
@@ -176,7 +195,7 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
   .get(
     "/index/status/:jobId",
     async ({ params }) => {
-      return await getIndexStatusTool.handle({ jobId: params.jobId });
+      return await getIndexStatusTool().handle({ jobId: params.jobId });
     },
     {
       params: t.Object({

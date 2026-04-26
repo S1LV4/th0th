@@ -78,6 +78,26 @@ export interface ListDefinitionsOptions {
   limit?: number;
 }
 
+export interface ProjectMapResult {
+  projectId: string;
+  stats: {
+    files: number;
+    chunks: number;
+    symbols: number;
+    status: string;
+    lastIndexedAt: string | null;
+  };
+  topCentralFiles: CentralityResult[];
+  symbolsByKind: Record<string, number>;
+  filesByLanguage: Record<string, number>;
+  recentFiles: Array<{ filePath: string; indexedAt: string | null }>;
+}
+
+export interface GetProjectMapOptions {
+  centralityLimit?: number;
+  recentLimit?: number;
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class SymbolGraphService {
@@ -254,6 +274,50 @@ export class SymbolGraphService {
       score: row.score,
       updatedAt: row.updated_at,
     }));
+  }
+
+  // ── project_map ─────────────────────────────────────────────────────────
+
+  /**
+   * Aggregate view of a project — stats, central files, symbol breakdown by
+   * kind, file count by language extension, and most-recently indexed files.
+   * Consumes symbol_files, symbol_definitions, and workspace metadata.
+   */
+  async getProjectMap(
+    projectId: string,
+    opts: GetProjectMapOptions = {},
+  ): Promise<ProjectMapResult | null> {
+    const centralityLimit = opts.centralityLimit ?? 20;
+    const recentLimit = opts.recentLimit ?? 10;
+
+    const repo = getSymbolRepository();
+    const workspace = await repo.getWorkspace(projectId);
+    if (!workspace) return null;
+
+    const [topCentralFiles, aggregates] = await Promise.all([
+      this.getTopCentralFiles(projectId, centralityLimit),
+      repo.getProjectMapAggregates(projectId, recentLimit),
+    ]);
+
+    return {
+      projectId,
+      stats: {
+        files: workspace.files_count,
+        chunks: workspace.chunks_count,
+        symbols: workspace.symbols_count,
+        status: workspace.status,
+        lastIndexedAt: workspace.last_indexed_at
+          ? new Date(workspace.last_indexed_at).toISOString()
+          : null,
+      },
+      topCentralFiles,
+      symbolsByKind: aggregates.symbolsByKind,
+      filesByLanguage: aggregates.filesByLanguage,
+      recentFiles: aggregates.recentFiles.map((r) => ({
+        filePath: r.filePath,
+        indexedAt: r.indexedAt ? new Date(r.indexedAt).toISOString() : null,
+      })),
+    };
   }
 
   // ── centrality recomputation ─────────────────────────────────────────────

@@ -1,0 +1,181 @@
+{
+  "projectId": "th0th",
+  "version": "1.0.0",
+  "description": "Needles validated against the th0th codebase itself (dogfooding). Each needle targets a non-obvious heuristic, magic constant, or scoring rule that pure keyword search would miss. Captured 2026-04-20.",
+  "scoring": {
+    "topK": 10,
+    "hitAtK": [1, 3, 5, 10],
+    "lineTolerance": 5,
+    "notes": "A hit requires the returned chunk's filePath to equal the needle's filePath AND [lineStart, lineEnd] to intersect the expected range (with ±lineTolerance on each side)."
+  },
+  "needles": [
+    {
+      "id": "N01-pagerank-damping",
+      "category": "string-literal-config-magic",
+      "difficulty": "medium",
+      "query": "constante de damping usada no algoritmo iterativo de relevância de arquivos",
+      "expected": {
+        "filePath": "packages/core/src/services/symbol/centrality.ts",
+        "lineStart": 14,
+        "lineEnd": 14
+      },
+      "rationale": "DAMPING=0.85 declarado como constante top-level. Sem `pagerank` no nome, exige conectar 'damping' ao conceito de PageRank."
+    },
+    {
+      "id": "N02-pagerank-iterations",
+      "category": "string-literal-config-magic",
+      "difficulty": "medium",
+      "query": "limite máximo de iterações no cálculo de centralidade",
+      "expected": {
+        "filePath": "packages/core/src/services/symbol/centrality.ts",
+        "lineStart": 15,
+        "lineEnd": 15
+      },
+      "rationale": "ITERATIONS=20 sem ligação textual a centralidade ou PageRank."
+    },
+    {
+      "id": "N03-keyword-boost-code-query",
+      "category": "business-rule-in-utility",
+      "difficulty": "hard",
+      "query": "fator multiplicador aplicado a resultados de keyword search quando a query parece código",
+      "expected": {
+        "filePath": "packages/core/src/services/search/contextual-search-rlm.ts",
+        "lineStart": 720,
+        "lineEnd": 727
+      },
+      "rationale": "isCodeQuery + KEYWORD_BOOST=2.5 hardcoded inline; heurística não é exposta como config."
+    },
+    {
+      "id": "N04-rrf-vector-blend",
+      "category": "domain-concept-without-keyword",
+      "difficulty": "hard",
+      "query": "proporção entre score RRF e similaridade vetorial bruta na composição do score final",
+      "expected": {
+        "filePath": "packages/core/src/services/search/contextual-search-rlm.ts",
+        "lineStart": 793,
+        "lineEnd": 795
+      },
+      "rationale": "70/30 split (rrfNormalized * 0.7 + vectorSimilarity * 0.3) sem constantes nomeadas."
+    },
+    {
+      "id": "N05-centrality-rerank-bonus",
+      "category": "domain-concept-without-keyword",
+      "difficulty": "hard",
+      "query": "bônus aplicado no ranking final para arquivos com alta centralidade no graph",
+      "expected": {
+        "filePath": "packages/core/src/services/search/contextual-search-rlm.ts",
+        "lineStart": 797,
+        "lineEnd": 804
+      },
+      "rationale": "combinedScore * (1 + 0.2 * centralityScore). Multiplicador 0.2 nu, sem constante."
+    },
+    {
+      "id": "N06-minscore-on-raw-vector",
+      "category": "business-rule-in-utility",
+      "difficulty": "hard",
+      "query": "filtro de score mínimo aplicado na similaridade vetorial bruta e não no score normalizado por RRF",
+      "expected": {
+        "filePath": "packages/core/src/services/search/contextual-search-rlm.ts",
+        "lineStart": 620,
+        "lineEnd": 636
+      },
+      "rationale": "Decisão crítica: minScore usa _rrfRawVectorScore quando disponível porque RRF normaliza top=1.0."
+    },
+    {
+      "id": "N07-brace-counter-strip-strings",
+      "category": "business-rule-in-utility",
+      "difficulty": "hard",
+      "query": "lógica que ignora chaves dentro de strings, regex ou comentários ao contar profundidade de bloco",
+      "expected": {
+        "filePath": "packages/core/src/services/search/smart-chunker.ts",
+        "lineStart": 612,
+        "lineEnd": 630
+      },
+      "rationale": "netBraceDelta strip prévio. Crítico para arquivos com regex literais (parsers, validadores) — drift de depth quebra chunking."
+    },
+    {
+      "id": "N08-no-merge-labeled-chunks",
+      "category": "business-rule-in-utility",
+      "difficulty": "medium",
+      "query": "regra que impede que chunks de código com rótulo semântico sejam mesclados com vizinhos pequenos",
+      "expected": {
+        "filePath": "packages/core/src/services/search/smart-chunker.ts",
+        "lineStart": 678,
+        "lineEnd": 690
+      },
+      "rationale": "Métodos curtos (3-4L getter/setter) têm label = não devem ser absorvidos pelo merge anti-fragmentação."
+    },
+    {
+      "id": "N09-markdown-no-headings-fallback",
+      "category": "business-rule-in-utility",
+      "difficulty": "medium",
+      "query": "fallback que usa chunking fixo quando arquivo markdown não tem nenhum heading",
+      "expected": {
+        "filePath": "packages/core/src/services/search/smart-chunker.ts",
+        "lineStart": 166,
+        "lineEnd": 175
+      },
+      "rationale": "Sem essa regra, README sem ## vira 1 mega-chunk que matcha qualquer query (bias .md descoberto no benchmark Sicad)."
+    },
+    {
+      "id": "N10-discover-sort-priority",
+      "category": "domain-concept-without-keyword",
+      "difficulty": "medium",
+      "query": "ordem de prioridade dos arquivos durante a fase de discover do ETL",
+      "expected": {
+        "filePath": "packages/core/src/services/etl/stages/discover.ts",
+        "lineStart": 97,
+        "lineEnd": 104
+      },
+      "rationale": "Ordem: centrality desc → mtime desc → path asc. Garante que arquivos importantes são embebidos primeiro (early-stop friendly)."
+    },
+    {
+      "id": "N11-fingerprint-cache-key",
+      "category": "business-rule-in-utility",
+      "difficulty": "medium",
+      "query": "comparação de hash que decide se um arquivo precisa ser reparseado no incremental reindex",
+      "expected": {
+        "filePath": "packages/core/src/services/etl/stages/discover.ts",
+        "lineStart": 142,
+        "lineEnd": 147
+      },
+      "rationale": "needsReparse = stored.content_hash !== contentHash. Skip por SHA-256 é o que torna reindex incremental viável."
+    },
+    {
+      "id": "N12-vector-table-by-dimension",
+      "category": "cross-language-stack",
+      "difficulty": "medium",
+      "query": "roteamento dinâmico para tabela do postgres baseado na dimensão do embedding",
+      "expected": {
+        "filePath": "packages/core/src/data/vector/postgres-vector-store.ts",
+        "lineStart": 60,
+        "lineEnd": 63
+      },
+      "rationale": "getTableName retorna `vector_documents_${dim}d`. Conecta env var → provider config → schema postgres."
+    },
+    {
+      "id": "N13-orphaned-chunks-warning",
+      "category": "cross-file-event-coupling",
+      "difficulty": "hard",
+      "query": "alerta emitido quando troca de modelo de embedding deixa chunks de outro tamanho dimensional órfãos",
+      "expected": {
+        "filePath": "packages/core/src/data/vector/postgres-vector-store.ts",
+        "lineStart": 138,
+        "lineEnd": 175
+      },
+      "rationale": "detectOrphanedChunks varre tabelas vector_documents_*d e avisa se houver dados em dim antiga. Bug silencioso comum."
+    },
+    {
+      "id": "N14-binary-quantization-sign",
+      "category": "string-literal-config-magic",
+      "difficulty": "medium",
+      "query": "regra de conversão de embedding float em bit-string usando o sinal do valor",
+      "expected": {
+        "filePath": "packages/core/src/data/vector/postgres-vector-store.ts",
+        "lineStart": 67,
+        "lineEnd": 74
+      },
+      "rationale": "floatsToBit: x ≥ 0 → '1', senão '0'. Threshold 0 hardcoded; base do binary quantization (≥ 2000d)."
+    }
+  ]
+}

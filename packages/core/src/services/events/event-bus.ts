@@ -52,6 +52,21 @@ export interface EventMap {
     filesCount?: number;
     symbolsCount?: number;
   };
+  "search:completed": {
+    query: string;
+    projectId: string;
+    sessionId?: string;
+    results: Array<{ filePath: string; score: number; lineStart?: number; lineEnd?: number }>;
+    durationMs: number;
+    resultCount: number;
+  };
+  /** Emitted by SearchSessionHook after a session memory is persisted. */
+  "memory:session-stored": {
+    memoryId: string;
+    projectId?: string;
+    sessionId?: string;
+    query: string;
+  };
 }
 
 export type EventName = keyof EventMap;

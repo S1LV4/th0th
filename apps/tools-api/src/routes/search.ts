@@ -5,17 +5,31 @@
  * POST /api/v1/search/code    - Busca semântica de código
  */
 
+import { SearchCodeTool, SearchProjectTool } from "@th0th-ai/core";
 import { Elysia, t } from "elysia";
-import { SearchProjectTool, SearchCodeTool } from "@th0th-ai/core";
 
-const searchProjectTool = new SearchProjectTool();
-const searchCodeTool = new SearchCodeTool();
+let searchProjectTool: SearchProjectTool | null = null;
+let searchCodeTool: SearchCodeTool | null = null;
+
+function getSearchProjectTool(): SearchProjectTool {
+  if (!searchProjectTool) {
+    searchProjectTool = new SearchProjectTool();
+  }
+  return searchProjectTool;
+}
+
+function getSearchCodeTool(): SearchCodeTool {
+  if (!searchCodeTool) {
+    searchCodeTool = new SearchCodeTool();
+  }
+  return searchCodeTool;
+}
 
 export const searchRoutes = new Elysia({ prefix: "/api/v1/search" })
   .post(
     "/project",
     async ({ body }) => {
-      return await searchProjectTool.handle(body);
+      return await getSearchProjectTool().handle(body);
     },
     {
       body: t.Object({
@@ -48,6 +62,7 @@ export const searchRoutes = new Elysia({ prefix: "/api/v1/search" })
           t.Array(t.String(), { description: "Glob patterns to exclude" }),
         ),
         explainScores: t.Optional(t.Boolean({ default: false })),
+        sessionId: t.Optional(t.String({ description: "Session ID for hook scoping" })),
         format: t.Optional(
           t.Union([t.Literal("json"), t.Literal("toon")], {
             default: "toon",
@@ -66,7 +81,7 @@ export const searchRoutes = new Elysia({ prefix: "/api/v1/search" })
   .post(
     "/code",
     async ({ body }) => {
-      return await searchCodeTool.handle(body);
+      return await getSearchCodeTool().handle(body);
     },
     {
       body: t.Object({

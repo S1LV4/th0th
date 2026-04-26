@@ -274,6 +274,74 @@ export class MemoryRepositoryPg {
   }
 
   /**
+   * Find recent memories that contain a given tag, scoped to session/project,
+   * within a time window. Used by CoRetrievalHook to find co-session memories.
+   */
+  async findRecentByTag(
+    tag: string,
+    opts: {
+      sessionId?: string;
+      projectId?: string;
+      excludeId?: string;
+      sinceMs: number;
+      limit: number;
+    },
+  ): Promise<Array<{ id: string }>> {
+    const since = new Date(opts.sinceMs);
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`${tag} = ANY(tags)`,
+      Prisma.sql`created_at >= ${since}`,
+    ];
+
+    if (opts.sessionId)  conditions.push(Prisma.sql`session_id = ${opts.sessionId}`);
+    if (opts.projectId)  conditions.push(Prisma.sql`project_id = ${opts.projectId}`);
+    if (opts.excludeId)  conditions.push(Prisma.sql`id != ${opts.excludeId}`);
+
+    const whereClause = Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
+
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM memories
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT ${opts.limit}
+    `;
+    return rows;
+  }
+
+  /**
+   * Find recent memories that have an embedding, for cosine-similarity
+   * comparisons in RelationExtractor. Scoped to a project when provided.
+   */
+  async findRecentWithEmbeddings(
+    excludeId: string,
+    projectId: string | null,
+    limit: number,
+  ): Promise<MemoryRow[]> {
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`id != ${excludeId}`,
+      Prisma.sql`embedding IS NOT NULL`,
+    ];
+
+    if (projectId) {
+      conditions.push(Prisma.sql`(project_id = ${projectId} OR project_id IS NULL)`);
+    }
+
+    const whereClause = Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
+
+    const rows = await this.prisma.$queryRaw<RawMemory[]>`
+      SELECT id, content, type, level,
+             user_id, session_id, project_id, agent_id,
+             importance, tags, embedding, metadata,
+             created_at, updated_at, access_count, last_accessed
+      FROM memories
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+    return rows.map(r => this.toMemoryRow(r));
+  }
+
+  /**
    * No-op — connection is managed by the singleton PrismaClient.
    */
   async close(): Promise<void> {}

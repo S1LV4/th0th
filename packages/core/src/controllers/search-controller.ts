@@ -8,6 +8,7 @@
 
 import { logger } from "@th0th-ai/shared";
 import { ContextualSearchRLM } from "../services/search/contextual-search-rlm.js";
+import { eventBus } from "../services/events/event-bus.js";
 import { minimatch } from "minimatch";
 
 // ── Types ────────────────────────────────────────────────────
@@ -28,6 +29,7 @@ export interface ProjectSearchInput {
    * Results whose filePath is in this list get score * 1.3.
    */
   boostFiles?: string[];
+  sessionId?: string;
 }
 
 export interface ProjectSearchResult {
@@ -96,6 +98,7 @@ export class SearchController {
       exclude,
       explainScores = false,
       boostFiles,
+      sessionId,
     } = input;
 
     const startTime = Date.now();
@@ -163,6 +166,21 @@ export class SearchController {
       }
 
       return base;
+    });
+
+    // Emit search:completed for hook subscribers (e.g. SearchSessionHook)
+    eventBus.publish("search:completed", {
+      query,
+      projectId,
+      sessionId,
+      results: formattedResults.map((r) => ({
+        filePath: r.filePath,
+        score: r.score,
+        lineStart: r.lineStart,
+        lineEnd: r.lineEnd,
+      })),
+      durationMs: Date.now() - startTime,
+      resultCount: formattedResults.length,
     });
 
     // Generate intelligent recommendations
