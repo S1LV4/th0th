@@ -12,14 +12,16 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import fs from "fs/promises";
 import { ApiClient } from "./api-client.js";
+import { collectFiles } from "./file-collector.js";
 import { TOOL_DEFINITIONS, getToolDefinition } from "./tool-definitions.js";
-import { 
-  configExists, 
-  initConfig, 
-  loadConfig, 
+import {
+  configExists,
+  initConfig,
+  loadConfig,
   getConfigPath,
-  getConfigDir 
+  getConfigDir
 } from "@th0th-ai/shared/config";
 
 // Check for config-related flags before starting MCP server
@@ -81,6 +83,10 @@ Examples:
   process.exit(0);
 }
 
+function textContent(text: string) {
+  return { content: [{ type: "text" as const, text }] };
+}
+
 // Auto-configure on first run
 if (!configExists()) {
   initConfig();
@@ -132,6 +138,10 @@ class McpProxyServer {
       const { name, arguments: args } = request.params;
 
       try {
+        if (name === "th0th_index") {
+          return await this.handleIndexTool((args ?? {}) as Record<string, unknown>);
+        }
+
         const toolDef = getToolDefinition(name);
         if (!toolDef) {
           throw new Error(`Unknown tool: ${name}`);
@@ -198,6 +208,49 @@ class McpProxyServer {
         };
       }
     });
+  }
+
+  private async handleIndexTool(
+    args: Record<string, unknown>,
+  ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+    const projectPath = args.projectPath as string | undefined;
+
+    if (!projectPath) {
+      return textContent(JSON.stringify({ success: false, error: "projectPath is required" }));
+    }
+
+    // Path not accessible locally — let the server try it directly (server-side path)
+    try {
+      const stat = await fs.stat(projectPath);
+      if (!stat.isDirectory()) throw new Error("not a directory");
+    } catch {
+      const toolDef = getToolDefinition("th0th_index")!;
+      const response = await this.apiClient.post(toolDef.apiEndpoint, args);
+      return textContent(JSON.stringify(response, null, 2));
+    }
+
+    console.error(`[th0th-mcp] Collecting files from ${projectPath}...`);
+    const files = await collectFiles(projectPath);
+
+    if (files.length === 0) {
+      return textContent(JSON.stringify({
+        success: false,
+        error: `No indexable files found in ${projectPath}`,
+      }));
+    }
+
+    console.error(`[th0th-mcp] Uploading ${files.length} files to remote API...`);
+
+    const response = await this.apiClient.uploadAndIndex({
+      projectPath,
+      projectId: args.projectId as string | undefined,
+      forceReindex: args.forceReindex as boolean | undefined,
+      warmCache: args.warmCache as boolean | undefined,
+      warmupQueries: args.warmupQueries as string[] | undefined,
+      files,
+    });
+
+    return textContent(JSON.stringify(response, null, 2));
   }
 
   async start(): Promise<void> {
