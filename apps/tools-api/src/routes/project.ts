@@ -8,9 +8,10 @@
 
 import {
   GetIndexStatusTool,
-  getMemoryRepository,
-  getVectorStore,
   IndexProjectTool,
+  getMemoryRepository,
+  getSearchCache,
+  getVectorStore,
   workspaceManager,
 } from "@th0th-ai/core";
 import { Elysia, t } from "elysia";
@@ -116,6 +117,10 @@ export const projectRoutes = new Elysia({ prefix: "/api/v1/project" })
         try {
           const vectorStore = await getVectorStore();
           result.vectorsDeleted = await vectorStore.deleteByProject(projectId);
+          // Invalidate the in-process search cache (L1 + L2). Without this,
+          // queries served from L1 keep returning stale chunk metadata
+          // (file/lineStart/lineEnd) until the process restarts.
+          await getSearchCache().invalidateProject(projectId);
         } catch (e) {
           errors.push(`vectors: ${(e as Error).message}`);
         }

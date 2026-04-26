@@ -62,6 +62,7 @@ export const searchRoutes = new Elysia({ prefix: "/api/v1/search" })
           t.Array(t.String(), { description: "Glob patterns to exclude" }),
         ),
         explainScores: t.Optional(t.Boolean({ default: false })),
+        sessionId: t.Optional(t.String({ description: "Session ID for hook scoping" })),
         format: t.Optional(
           t.Union([t.Literal("json"), t.Literal("toon")], {
             default: "toon",

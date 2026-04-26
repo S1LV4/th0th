@@ -10,18 +10,15 @@
  * with optional LLM refinement when available.
  */
 
-import { Database } from "bun:sqlite";
-import path from "path";
 import {
   MemoryRelationType,
-  MemoryType,
   ExtractedRelation,
-  config,
   logger,
 } from "@th0th-ai/shared";
 import { EmbeddingService } from "../../data/chromadb/vector-store.js";
 import { GraphStore } from "./graph-store.js";
-import type { MemoryRowWithEmbedding as MemoryRow } from "./types.js";
+import { getMemoryRepository } from "../../data/memory/memory-repository-factory.js";
+import type { MemoryRow } from "../../data/memory/memory-repository.js";
 
 interface ExtractionOptions {
   /** Max similar memories to compare against */
@@ -100,21 +97,12 @@ const SUPPORT_SIGNALS = [
 ];
 
 export class RelationExtractor {
-  private db!: Database;
   private embeddingService: EmbeddingService;
   private graphStore: GraphStore;
 
   constructor(graphStore?: GraphStore) {
     this.embeddingService = new EmbeddingService();
     this.graphStore = graphStore ?? GraphStore.getInstance();
-    this.initDb();
-  }
-
-  private initDb(): void {
-    const dataDir = config.get("dataDir") as string;
-    const dbPath = path.join(dataDir, "memories.db");
-    this.db = new Database(dbPath);
-    this.db.exec("PRAGMA busy_timeout = 3000");
   }
 
   /**
@@ -136,7 +124,7 @@ export class RelationExtractor {
 
     try {
       // Load the new memory
-      const memory = this.loadMemory(memoryId);
+      const memory = await this.loadMemory(memoryId);
       if (!memory) {
         logger.warn("RelationExtractor: memory not found", { memoryId });
         return 0;
@@ -144,7 +132,11 @@ export class RelationExtractor {
 
       // Get embedding
       const embedding = memory.embedding
-        ? Array.from(new Float32Array(memory.embedding.buffer))
+        ? Array.from(new Float32Array(
+            memory.embedding.buffer,
+            memory.embedding.byteOffset,
+            memory.embedding.byteLength / 4,
+          ))
         : null;
 
       if (!embedding || embedding.every((v) => v === 0)) {
@@ -153,7 +145,7 @@ export class RelationExtractor {
       }
 
       // Find similar memories
-      const candidates = this.findSimilarMemories(
+      const candidates = await this.findSimilarMemories(
         memoryId,
         embedding,
         memory.project_id,
@@ -210,38 +202,17 @@ export class RelationExtractor {
   /**
    * Find memories with similar embeddings (brute-force cosine similarity).
    */
-  private findSimilarMemories(
+  private async findSimilarMemories(
     excludeId: string,
     queryEmbedding: number[],
     projectId: string | null,
     limit: number,
     threshold: number,
-  ): (MemoryRow & { similarity: number })[] {
-    // Fetch candidate memories (recent, same project if possible)
-    const conditions: string[] = ["id != ?"];
-    const params: any[] = [excludeId];
+  ): Promise<(MemoryRow & { similarity: number })[]> {
+    const repo = getMemoryRepository() as any;
+    if (typeof repo.findRecentWithEmbeddings !== "function") return [];
 
-    if (projectId) {
-      conditions.push("(project_id = ? OR project_id IS NULL)");
-      params.push(projectId);
-    }
-
-    conditions.push("embedding IS NOT NULL");
-
-    // Limit scan to recent memories for performance
-    params.push(500);
-
-    const rows = this.db
-      .prepare(
-        `
-      SELECT id, content, type, level, importance, tags, embedding, created_at, project_id
-      FROM memories
-      WHERE ${conditions.join(" AND ")}
-      ORDER BY created_at DESC
-      LIMIT ?
-    `,
-      )
-      .all(...params) as MemoryRow[];
+    const rows: MemoryRow[] = await repo.findRecentWithEmbeddings(excludeId, projectId, 500);
 
     // Calculate cosine similarity
     const scored: (MemoryRow & { similarity: number })[] = [];
@@ -407,15 +378,8 @@ export class RelationExtractor {
 
   // ── Helpers ────────────────────────────────────────────────
 
-  private loadMemory(memoryId: string): MemoryRow | null {
-    return this.db
-      .prepare(
-        `
-      SELECT id, content, type, level, importance, tags, embedding, created_at, project_id
-      FROM memories WHERE id = ?
-    `,
-      )
-      .get(memoryId) as MemoryRow | null;
+  private async loadMemory(memoryId: string): Promise<MemoryRow | null> {
+    return getMemoryRepository().getById(memoryId);
   }
 
   private sharesTags(a: MemoryRow, b: MemoryRow): boolean {
@@ -443,10 +407,4 @@ export class RelationExtractor {
     return denominator === 0 ? 0 : dotProduct / denominator;
   }
 
-  /**
-   * Close database connection.
-   */
-  close(): void {
-    this.db?.close();
-  }
 }

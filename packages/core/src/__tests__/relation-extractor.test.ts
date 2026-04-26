@@ -47,8 +47,15 @@ mock.module("../data/chromadb/vector-store.js", () => ({
   },
 }));
 
+mock.module("../data/memory/memory-repository-factory.js", () => ({
+  getMemoryRepository: () => ({
+    getById: async (_id: string) => null,
+    findRecentWithEmbeddings: async () => [],
+  }),
+}));
+
 import { RelationExtractor } from "../services/graph/relation-extractor.js";
-import type { MemoryRowWithEmbedding } from "../services/graph/types.js";
+import type { MemoryRow } from "../data/memory/memory-repository.js";
 import { GraphStore } from "../services/graph/graph-store.js";
 import fs from "fs";
 import path from "path";
@@ -59,8 +66,8 @@ describe("RelationExtractor.classifyRelation", () => {
   let graphStore: GraphStore;
 
   function makeMemory(
-    overrides: Partial<MemoryRowWithEmbedding> & { similarity?: number },
-  ): MemoryRowWithEmbedding & { similarity: number } {
+    overrides: Partial<MemoryRow> & { similarity?: number },
+  ): MemoryRow & { similarity: number } {
     return {
       id: "test_id",
       content: "test content",
@@ -69,16 +76,18 @@ describe("RelationExtractor.classifyRelation", () => {
       importance: 0.5,
       tags: "[]",
       embedding: null,
+      metadata: null,
       created_at: Date.now(),
       updated_at: Date.now(),
       access_count: 0,
+      last_accessed: null,
       user_id: null,
       session_id: null,
       project_id: null,
       agent_id: null,
       similarity: 0.7,
       ...overrides,
-    } as MemoryRowWithEmbedding & { similarity: number };
+    } as MemoryRow & { similarity: number };
   }
 
   // Use a temp dir for DB
@@ -93,7 +102,6 @@ describe("RelationExtractor.classifyRelation", () => {
   });
 
   afterAll(() => {
-    extractor.close();
     graphStore.close();
     fs.rmSync(cleanupDir, { recursive: true, force: true });
   });

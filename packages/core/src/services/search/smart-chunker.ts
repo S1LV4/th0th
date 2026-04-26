@@ -52,14 +52,21 @@ export interface ChunkerConfig {
   fixedChunkSize: number;
   /** Whether to add file-path context prefix to each chunk */
   addFileContext: boolean;
+  /**
+   * Max characters per chunk. Takes precedence over line count for files with
+   * very long lines (minified JS, single-line JSON, i18n files). Should stay
+   * below the embedding provider's maxChars to avoid truncation.
+   */
+  maxChunkChars: number;
 }
 
 const DEFAULT_CONFIG: ChunkerConfig = {
-  maxChunkLines: 200, // ~4000 chars avg, fits within MAX_CHARS without truncation
+  maxChunkLines: 200,
   minChunkLines: 5,
   codeChunkTarget: 80,
   fixedChunkSize: 50,
   addFileContext: true,
+  maxChunkChars: 7500, // 90% of 8000 char Ollama maxChars default, leaves room for file-context prefix
 };
 
 /**
@@ -106,15 +113,42 @@ export function smartChunk(
       break;
   }
 
-  // Post-processing: merge tiny chunks, split oversized ones
-  chunks = postProcess(chunks, cfg);
+  // Post-processing: merge tiny chunks, split oversized ones.
+  // Reserve ~250 chars for the file/label context header that is prepended
+  // afterwards so the final chunk never exceeds cfg.maxChunkChars.
+  const HEADER_BUDGET = 250;
+  const postCfg = cfg.maxChunkChars > HEADER_BUDGET
+    ? { ...cfg, maxChunkChars: cfg.maxChunkChars - HEADER_BUDGET }
+    : cfg;
+  chunks = postProcess(chunks, postCfg);
 
-  // Add file context prefix for better embedding quality
+  // Add file context prefix for better embedding quality.
+  //
+  // The label (Class.method, top-level fn name, etc.) is the highest-signal
+  // token for retrieval — repeat it 3x in the header so the embedding vector
+  // is biased toward it. Known RAG trick for transformer-based embeddings:
+  // token frequency in the input shifts attention.
+  //
+  // BUT: do NOT repeat for tiny chunks (< 5 lines). A 1-line constant like
+  // `const REINDEX_FILE_THRESHOLD = 15` would otherwise outrank the actual
+  // implementation when the query mentions "reindex" — the label match is
+  // trivial and not informative. For tiny chunks, the label appears once
+  // (via `// Section:`) which is enough.
+  const REPEAT_MIN_LINES = 5;
   if (cfg.addFileContext) {
-    chunks = chunks.map((chunk) => ({
-      ...chunk,
-      content: `// File: ${relativePath}\n${chunk.label ? `// Section: ${chunk.label}\n` : ""}${chunk.content}`,
-    }));
+    chunks = chunks.map((chunk) => {
+      const lineCount = chunk.content.split("\n").length;
+      const repeat = chunk.label && lineCount >= REPEAT_MIN_LINES;
+      const labelHeader = chunk.label
+        ? repeat
+          ? `// Section: ${chunk.label}\n// ${chunk.label}\n// ${chunk.label}\n`
+          : `// Section: ${chunk.label}\n`
+        : "";
+      return {
+        ...chunk,
+        content: `// File: ${relativePath}\n${labelHeader}${chunk.content}`,
+      };
+    });
   }
 
   // Filter out empty chunks
@@ -132,8 +166,20 @@ export function smartChunk(
  *   like "Installation > Prerequisites"
  * - Content before the first heading is its own chunk ("preamble")
  * - Code blocks (```) are treated as opaque (headings inside them are ignored)
+ * - If the file has NO headings at all, fall back to fixed chunking so we
+ *   don't emit a single mega-chunk that matches every query.
  */
 function chunkMarkdown(content: string, cfg: ChunkerConfig): Chunk[] {
+  // Quick scan: if no headings exist, fall back to fixed chunks.
+  // Otherwise the whole file becomes one "preamble" that wins every search
+  // by virtue of containing every keyword in the query.
+  const hasHeading = /^\s*#{1,6}\s+/m.test(content);
+  if (!hasHeading) return chunkFixed(content, cfg);
+
+  return chunkMarkdownByHeadings(content, cfg);
+}
+
+function chunkMarkdownByHeadings(content: string, _cfg: ChunkerConfig): Chunk[] {
   const lines = content.split("\n");
   const chunks: Chunk[] = [];
 
@@ -385,163 +431,205 @@ function chunkYAML(content: string, cfg: ChunkerConfig): Chunk[] {
 // --- Code Chunker (improved version of original) ---
 
 /**
- * Split code by semantic blocks (functions, classes, etc.)
+ * Split code by semantic blocks (functions, classes, methods).
  *
- * Improvements over original:
- * - More patterns: Python (def/class), Go (func), Rust (fn/impl/struct)
- * - Captures preceding comments/decorators as part of the chunk
- * - Limits individual chunk size (splits huge functions)
+ * Two-phase algorithm:
+ *
+ *   Phase 1 — find boundaries: scan once tracking brace depth.
+ *     - At depth 0: top-level declarations (class/interface/function/const/...)
+ *     - At depth = container.openDepth + 1 (one level inside a container):
+ *       method-like declarations (`name(...)`, `name<T>(...)`)
+ *     Pure-comment lines are skipped for boundary detection but do not
+ *     update brace depth (comments rarely contain raw braces).
+ *
+ *   Phase 2 — slice into chunks: walk back from each boundary to absorb
+ *     immediately-preceding doc comments / decorators (without crossing
+ *     the previous boundary). Lines before the first boundary become a
+ *     `imports` preamble chunk.
+ *
+ * This replaces the previous brace-counting accumulator, which had two
+ * bugs: (a) methods inside a class were never split (the whole class became
+ * one chunk because `isBlockStart` was only checked when `!inBlock`), and
+ * (b) the comment-buffer was emitted twice in some edge cases, producing
+ * overlapping chunk ranges.
  */
 function chunkCode(content: string, cfg: ChunkerConfig): Chunk[] {
   const lines = content.split("\n");
+  const boundaries = findCodeBoundaries(lines);
+
+  if (boundaries.length === 0) return chunkFixed(content, cfg);
+
+  // Compute realStart for each boundary (walk back over preceding doc comments
+  // / decorators, but never cross the previous boundary's line).
+  const realStarts: number[] = [];
+  for (let b = 0; b < boundaries.length; b++) {
+    const limit = b > 0 ? boundaries[b - 1].line + 1 : 0;
+    let s = boundaries[b].line;
+    while (s > limit) {
+      const prev = lines[s - 1].trimStart();
+      const isDoc =
+        prev.startsWith("//") ||
+        prev.startsWith("/*") ||
+        prev.startsWith("*") ||
+        prev.startsWith("///") ||
+        prev.startsWith("@") ||
+        prev.startsWith('"""');
+      if (isDoc) s--;
+      else break;
+    }
+    realStarts.push(s);
+  }
+
   const chunks: Chunk[] = [];
 
-  // Block start patterns for multiple languages
-  const blockPatterns = [
-    // TypeScript/JavaScript
-    /^\s*(export\s+)?(class|interface|type|enum)\s+\w+/,
-    /^\s*(export\s+)?(async\s+)?function\s+\w+/,
-    /^\s*(export\s+)?const\s+\w+\s*=\s*(async\s*)?\(/,
-    /^\s*(export\s+)?(async\s+)?\w+\s*\([^)]*\)\s*(:\s*\w+)?\s*\{/,
-    /^\s*describe\s*\(/, // test blocks
-    /^\s*it\s*\(/, // test cases
-    // Python
-    /^\s*(async\s+)?def\s+\w+/,
-    /^\s*class\s+\w+/,
-    // Go
-    /^\s*func\s+(\([^)]+\)\s+)?\w+/,
-    // Rust
-    /^\s*(pub\s+)?(async\s+)?fn\s+\w+/,
-    /^\s*(pub\s+)?struct\s+\w+/,
-    /^\s*(pub\s+)?enum\s+\w+/,
-    /^\s*(pub\s+)?impl\s+/,
-    /^\s*(pub\s+)?trait\s+/,
-    // C/C++
-    /^\s*(\w+\s+)+\w+\s*\([^)]*\)\s*\{/,
-  ];
+  // Preamble: anything before the first boundary's realStart (imports,
+  // file-level constants, file JSDoc).
+  if (realStarts[0] > 0) {
+    const preamble = lines.slice(0, realStarts[0]);
+    if (preamble.some((l) => l.trim())) {
+      chunks.push({
+        content: preamble.join("\n"),
+        lineStart: 1,
+        lineEnd: realStarts[0],
+        type: "code_block",
+        label: "imports",
+      });
+    }
+  }
 
-  let currentChunk: { lines: string[]; startLine: number } | null = null;
-  let braceCount = 0;
-  let inBlock = false;
+  for (let b = 0; b < boundaries.length; b++) {
+    const start = realStarts[b];
+    const end = b + 1 < realStarts.length ? realStarts[b + 1] : lines.length;
+    const slice = lines.slice(start, end);
+    if (!slice.some((l) => l.trim())) continue;
+    const label = boundaries[b].container
+      ? `${boundaries[b].container}.${boundaries[b].label}`
+      : boundaries[b].label;
+    chunks.push({
+      content: slice.join("\n"),
+      lineStart: start + 1,
+      lineEnd: end,
+      type: "code_block",
+      label,
+    });
+  }
 
-  // Track preceding comment/decorator lines to include with the block
-  let commentBuffer: string[] = [];
-  let commentBufferStart = -1;
+  return chunks;
+}
+
+interface CodeBoundary {
+  /** 0-indexed line where the declaration starts */
+  line: number;
+  /** Symbol name (e.g. "ParseStage", "extractJsSymbols") */
+  label: string;
+  /** Outer container name when this boundary is a method */
+  container?: string;
+}
+
+const RESERVED_KEYWORDS = new Set([
+  "if", "for", "while", "switch", "return", "throw", "catch",
+  "do", "try", "else", "case", "with", "yield", "await",
+]);
+
+/** Top-level container declarations (class/interface/enum/namespace/trait/impl) */
+const CONTAINER_RE =
+  /^(?:export\s+(?:default\s+)?)?(?:abstract\s+)?(?:class|interface|enum|namespace|trait|impl)\s+(\w+)/;
+
+/** Top-level non-container declarations (function/const/let/var/type/struct/fn/def/func) */
+const TOP_LEVEL_RE =
+  /^(?:export\s+(?:default\s+)?)?(?:async\s+)?(?:function|const|let|var|type|struct|fn|def|func)\s+(\w+)/;
+
+/** Method-like declarations inside a class body: identifier followed by `(` or `<` */
+const METHOD_RE =
+  /^(?:public\s+|private\s+|protected\s+|static\s+|readonly\s+|override\s+|async\s+|abstract\s+|get\s+|set\s+)*(\w+)\s*[(<]/;
+
+function findCodeBoundaries(lines: string[]): CodeBoundary[] {
+  const boundaries: CodeBoundary[] = [];
+  const containerStack: { name: string; openDepth: number }[] = [];
+  let depth = 0;
+  let inBlockComment = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trimStart();
 
-    // Track comments and decorators that precede blocks
+    // Block comment continuations
+    if (inBlockComment) {
+      if (line.includes("*/")) inBlockComment = false;
+      continue;
+    }
+    if (trimmed.startsWith("/*") && !trimmed.includes("*/")) {
+      inBlockComment = true;
+      continue;
+    }
+    // Skip empty / pure comment lines (no brace updates, no boundary)
     if (
-      !inBlock &&
-      (trimmed.startsWith("//") ||
-        trimmed.startsWith("/*") ||
-        trimmed.startsWith("*") ||
-        trimmed.startsWith("#") ||
-        trimmed.startsWith("@") ||
-        trimmed.startsWith('"""') ||
-        trimmed.startsWith("///"))
+      !trimmed ||
+      trimmed.startsWith("//") ||
+      trimmed.startsWith("///") ||
+      trimmed.startsWith("*")
     ) {
-      if (commentBuffer.length === 0) {
-        commentBufferStart = i;
-      }
-      commentBuffer.push(line);
       continue;
     }
 
-    const isBlockStart = blockPatterns.some((pattern) => pattern.test(line));
-
-    if (isBlockStart && !inBlock) {
-      // Save previous chunk if it has content
-      if (currentChunk && currentChunk.lines.length > 0) {
-        chunks.push({
-          content: currentChunk.lines.join("\n"),
-          lineStart: currentChunk.startLine,
-          lineEnd: Math.max(currentChunk.startLine, i),
-          type: "code_block",
+    // Boundary detection BEFORE updating depth (depth still reflects the state
+    // at the start of this line)
+    if (depth === 0) {
+      const c = CONTAINER_RE.exec(trimmed);
+      if (c) {
+        boundaries.push({ line: i, label: c[1] });
+        containerStack.push({ name: c[1], openDepth: 0 });
+      } else {
+        const t = TOP_LEVEL_RE.exec(trimmed);
+        if (t) boundaries.push({ line: i, label: t[1] });
+      }
+    } else if (
+      containerStack.length > 0 &&
+      depth === containerStack[containerStack.length - 1].openDepth + 1
+    ) {
+      const m = METHOD_RE.exec(trimmed);
+      if (m && !RESERVED_KEYWORDS.has(m[1])) {
+        boundaries.push({
+          line: i,
+          label: m[1],
+          container: containerStack[containerStack.length - 1].name,
         });
       }
+    }
 
-      // Start new chunk, including preceding comments
-      const blockLines =
-        commentBuffer.length > 0 ? [...commentBuffer, line] : [line];
-      const startLine =
-        commentBuffer.length > 0 ? commentBufferStart + 1 : i + 1;
+    // Update depth using the line's brace counts (strings/regex/comments
+    // stripped first, so braces inside `"{"`, `/\{/`, etc. don't drift the
+    // depth — this matters for files like parsers that contain regex
+    // literals with curly braces).
+    depth += netBraceDelta(line);
 
-      currentChunk = {
-        lines: blockLines,
-        startLine,
-      };
-      commentBuffer = [];
-      inBlock = true;
-      braceCount =
-        (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
-    } else if (inBlock && currentChunk) {
-      currentChunk.lines.push(line);
-      braceCount +=
-        (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
-
-      // End of block: brace closed OR safety valve (prevents infinite accumulation)
-      const shouldClose =
-        (braceCount <= 0 && trimmed.endsWith("}")) ||
-        currentChunk.lines.length >= cfg.maxChunkLines;
-      if (shouldClose) {
-        chunks.push({
-          content: currentChunk.lines.join("\n"),
-          lineStart: currentChunk.startLine,
-          lineEnd: i + 1,
-          type: "code_block",
-        });
-        currentChunk = null;
-        inBlock = false;
-        braceCount = 0;
-        commentBuffer = [];
-      }
-    } else if (!inBlock && line.trim()) {
-      // Flush comment buffer into current chunk
-      if (commentBuffer.length > 0) {
-        if (!currentChunk) {
-          currentChunk = {
-            lines: [],
-            startLine: commentBufferStart + 1,
-          };
-        }
-        currentChunk.lines.push(...commentBuffer);
-        commentBuffer = [];
-      }
-
-      if (!currentChunk) {
-        currentChunk = {
-          lines: [],
-          startLine: i + 1,
-        };
-      }
-      currentChunk.lines.push(line);
+    // Pop containers whose scope just closed
+    while (
+      containerStack.length > 0 &&
+      depth <= containerStack[containerStack.length - 1].openDepth
+    ) {
+      containerStack.pop();
     }
   }
 
-  // Flush remaining comment buffer
-  if (commentBuffer.length > 0 && currentChunk) {
-    currentChunk.lines.push(...commentBuffer);
-  }
+  return boundaries;
+}
 
-  // Final chunk
-  if (currentChunk && currentChunk.lines.length > 0) {
-    chunks.push({
-      content: currentChunk.lines.join("\n"),
-      lineStart: currentChunk.startLine,
-      lineEnd: lines.length,
-      type: "code_block",
-    });
-  }
-
-  // If no semantic blocks found, use fixed chunking
-  if (chunks.length === 0) {
-    return chunkFixed(content, cfg);
-  }
-
-  return chunks;
+/**
+ * Brace-depth delta for a single line, ignoring braces inside string,
+ * template, regex, and inline comment literals. Heuristic — does not handle
+ * template-literal `${}` interpolation expressions correctly, but those are
+ * rare enough at the line level that the drift is bounded.
+ */
+function netBraceDelta(line: string): number {
+  const stripped = line
+    .replace(/\/\*.*?\*\//g, "") // inline /* ... */
+    .replace(/\/\/.*$/, "") // // line comment
+    .replace(/'(?:\\.|[^'\\])*'/g, "''") // 'single'
+    .replace(/"(?:\\.|[^"\\])*"/g, '""') // "double"
+    .replace(/`(?:\\.|[^`\\])*`/g, "``") // `template` (no ${} support)
+    .replace(/\/(?:\\.|[^/\\\n])+\/[gimsuy]*/g, "//"); // /regex/flags
+  return (stripped.match(/\{/g) || []).length - (stripped.match(/\}/g) || []).length;
 }
 
 // --- Fixed Chunker (fallback) ---
@@ -583,23 +671,47 @@ function postProcess(chunks: Chunk[], cfg: ChunkerConfig): Chunk[] {
 
   for (const chunk of chunks) {
     const lineCount = chunk.content.split("\n").length;
+    const charCount = chunk.content.length;
 
-    // Split oversized chunks
-    if (lineCount > cfg.maxChunkLines) {
-      const subChunks = splitOversizedChunk(chunk, cfg);
+    // For code blocks, use the (smaller) codeChunkTarget so that long methods
+    // (like a 180-line controller `calculate` with multiple validation
+    // sub-blocks) get split into focused pieces. Embeddings of huge methods
+    // wash out semantic signal — splitting recovers recall.
+    const lineLimit =
+      chunk.type === "code_block" ? cfg.codeChunkTarget : cfg.maxChunkLines;
+
+    // Split oversized chunks (by lines OR by chars — long single lines bypass line-based limit)
+    if (lineCount > lineLimit || charCount > cfg.maxChunkChars) {
+      const subChunks = splitOversizedChunk(
+        chunk,
+        chunk.type === "code_block"
+          ? { ...cfg, maxChunkLines: cfg.codeChunkTarget }
+          : cfg,
+      );
       result.push(...subChunks);
       continue;
     }
 
-    // Merge tiny chunks with previous
+    // Merge tiny chunks with previous — but NEVER merge code chunks that
+    // carry an explicit semantic label (method/function name). A 3-line
+    // getter is small but discoverable; merging it into a neighbor erases
+    // it from search.
+    if (chunk.label && chunk.type === "code_block") {
+      result.push(chunk);
+      continue;
+    }
     if (
       lineCount < cfg.minChunkLines &&
       result.length > 0
     ) {
       const prev = result[result.length - 1];
       const prevLineCount = prev.content.split("\n").length;
-      // Only merge if combined size is reasonable
-      if (prevLineCount + lineCount <= cfg.maxChunkLines) {
+      const prevCharCount = prev.content.length;
+      // Only merge if combined size is reasonable (both line and char limits)
+      if (
+        prevLineCount + lineCount <= cfg.maxChunkLines &&
+        prevCharCount + charCount + 1 <= cfg.maxChunkChars
+      ) {
         prev.content += "\n" + chunk.content;
         prev.lineEnd = chunk.lineEnd;
         // Keep the previous chunk's label
@@ -615,49 +727,105 @@ function postProcess(chunks: Chunk[], cfg: ChunkerConfig): Chunk[] {
 
 /**
  * Split an oversized chunk into smaller pieces.
- * Tries to split at blank lines or heading boundaries.
+ *
+ * Split is capped by both line count (cfg.maxChunkLines) and char count
+ * (cfg.maxChunkChars). Prefers blank-line boundaries when possible. A single
+ * line longer than maxChunkChars is further split by characters, preferring
+ * semantic separators (`; , } `) before a hard cut.
  */
 function splitOversizedChunk(chunk: Chunk, cfg: ChunkerConfig): Chunk[] {
   const lines = chunk.content.split("\n");
-  const target = cfg.maxChunkLines;
+  const targetLines = cfg.maxChunkLines;
+  const maxChars = cfg.maxChunkChars;
   const subChunks: Chunk[] = [];
+
+  const pushSub = (subLines: string[], startIdx: number, endIdx: number) => {
+    if (!subLines.some((l) => l.trim())) return;
+    subChunks.push({
+      content: subLines.join("\n"),
+      lineStart: chunk.lineStart + startIdx,
+      lineEnd: chunk.lineStart + endIdx - 1,
+      type: chunk.type,
+      label: chunk.label
+        ? `${chunk.label} (part ${subChunks.length + 1})`
+        : undefined,
+    });
+  };
 
   let start = 0;
   while (start < lines.length) {
-    let end = Math.min(start + target, lines.length);
+    // Single line exceeds maxChars: split that line by characters
+    if (lines[start].length > maxChars) {
+      const parts = splitLineByChars(lines[start], maxChars);
+      for (const part of parts) {
+        subChunks.push({
+          content: part,
+          lineStart: chunk.lineStart + start,
+          lineEnd: chunk.lineStart + start,
+          type: chunk.type,
+          label: chunk.label
+            ? `${chunk.label} (part ${subChunks.length + 1})`
+            : undefined,
+        });
+      }
+      start += 1;
+      continue;
+    }
 
-    // Try to find a natural break point (blank line) near the target
+    let end = Math.min(start + targetLines, lines.length);
+
+    // Shrink end until the slice fits within maxChars
+    while (end > start + 1) {
+      const sliceLen = lines.slice(start, end).reduce((s, l) => s + l.length + 1, -1);
+      if (sliceLen <= maxChars) break;
+      end--;
+    }
+
+    // Prefer a blank-line break in the final half of the window
     if (end < lines.length) {
-      let bestBreak = -1;
-      // Search backward from target for a blank line
-      for (let i = end; i > start + Math.floor(target * 0.5); i--) {
-        if (lines[i].trim() === "") {
-          bestBreak = i;
+      const minBreak = start + Math.max(1, Math.floor((end - start) * 0.5));
+      for (let i = end; i > minBreak; i--) {
+        if (lines[i]?.trim() === "") {
+          end = i;
           break;
         }
       }
-      if (bestBreak > start) {
-        end = bestBreak;
-      }
     }
 
-    const subLines = lines.slice(start, end);
-    if (subLines.some((l) => l.trim())) {
-      subChunks.push({
-        content: subLines.join("\n"),
-        lineStart: chunk.lineStart + start,
-        lineEnd: chunk.lineStart + end - 1,
-        type: chunk.type,
-        label: chunk.label
-          ? `${chunk.label} (part ${subChunks.length + 1})`
-          : undefined,
-      });
-    }
+    pushSub(lines.slice(start, end), start, end);
 
-    start = end;
+    // Safety: guarantee progress if the loop produced an empty slice
+    start = end === start ? start + 1 : end;
   }
 
   return subChunks;
+}
+
+/**
+ * Split a single overly long line into parts ≤ maxChars each.
+ * Prefers semantic separators (`;` > `,` > `}` > space) within the last 20%
+ * of each window. Falls back to a hard cut at maxChars.
+ */
+function splitLineByChars(line: string, maxChars: number): string[] {
+  const parts: string[] = [];
+  let remaining = line;
+  while (remaining.length > maxChars) {
+    const windowStart = Math.floor(maxChars * 0.8);
+    const window = remaining.substring(windowStart, maxChars);
+    let breakAt = -1;
+    for (const sep of [";", ",", "}", " "]) {
+      const idx = window.lastIndexOf(sep);
+      if (idx >= 0) {
+        breakAt = windowStart + idx + 1;
+        break;
+      }
+    }
+    if (breakAt < 0) breakAt = maxChars;
+    parts.push(remaining.substring(0, breakAt));
+    remaining = remaining.substring(breakAt);
+  }
+  if (remaining) parts.push(remaining);
+  return parts;
 }
 
 // --- Utilities ---

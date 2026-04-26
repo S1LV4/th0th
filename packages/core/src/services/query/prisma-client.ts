@@ -10,6 +10,27 @@ import { PrismaClient } from "../../generated/prisma/index.js";
 let prismaInstance: PrismaClient | null = null;
 let prismaPool: import("pg").Pool | null = null;
 
+/**
+ * @internal
+ */
+export const _adapters = {
+  loadPg(): typeof import('pg') {
+    return require('pg') as typeof import('pg');
+  },
+  loadPrismaPg(): typeof import('@prisma/adapter-pg') {
+    return require('@prisma/adapter-pg') as typeof import('@prisma/adapter-pg');
+  },
+  loadPrismaBunSqlite(): typeof import('prisma-adapter-bun-sqlite') {
+    return require('prisma-adapter-bun-sqlite') as typeof import('prisma-adapter-bun-sqlite');
+  },
+};
+
+/** @internal — resets the singleton; call in afterEach during unit tests only */
+export function _resetPrismaForTesting(): void {
+  prismaInstance = null;
+  prismaPool = null;
+}
+
 export function getPrismaClient(): PrismaClient {
   if (!prismaInstance) {
     const databaseUrl = process.env.DATABASE_URL;
@@ -18,16 +39,11 @@ export function getPrismaClient(): PrismaClient {
     const isPostgres = databaseUrl?.startsWith("postgres");
 
     if (isPostgres) {
-      // Bun supports require() in ESM modules as a synchronous dynamic import.
-      // We use it here intentionally: getPrismaClient() is called synchronously
-      // at module init time in many places, making async import() impractical.
-      // This is Bun-specific and will not work in vanilla Node.js ESM.
-      let pool: import("pg").Pool;
-      let PrismaPg: typeof import("@prisma/adapter-pg").PrismaPg;
+      let pool: import('pg').Pool;
+      let PrismaPg: typeof import('@prisma/adapter-pg').PrismaPg;
       try {
-        const pg = require("pg") as typeof import("pg");
-        const adapterPg =
-          require("@prisma/adapter-pg") as typeof import("@prisma/adapter-pg");
+        const pg = _adapters.loadPg();
+        const adapterPg = _adapters.loadPrismaPg();
         pool = new pg.Pool({
           connectionString: databaseUrl,
           max: 10,
@@ -39,12 +55,8 @@ export function getPrismaClient(): PrismaClient {
         });
         PrismaPg = adapterPg.PrismaPg;
       } catch (e) {
-        logger.error(
-          "pg or @prisma/adapter-pg not available for PostgreSQL Prisma client",
-          e as Error,
-        );
         throw new Error(
-          'Prisma PostgreSQL adapter is unavailable. Install optional dependency "pg" and ensure "@prisma/adapter-pg" is available.',
+          'pg or @prisma/adapter-pg is required for PostgreSQL mode but could not be loaded. Run: bun add pg @prisma/adapter-pg'
         );
       }
       prismaPool = pool;
@@ -52,19 +64,13 @@ export function getPrismaClient(): PrismaClient {
       prismaInstance = new PrismaClient({ adapter });
       logger.info("Prisma Client initialized with PostgreSQL (pg adapter)");
     } else {
-      // Same pattern: synchronous require() for Bun ESM compatibility.
-      let PrismaBunSqlite: typeof import("prisma-adapter-bun-sqlite").PrismaBunSqlite;
+      let PrismaBunSqlite: typeof import('prisma-adapter-bun-sqlite').PrismaBunSqlite;
       try {
-        const bunAdapter =
-          require("prisma-adapter-bun-sqlite") as typeof import("prisma-adapter-bun-sqlite");
+        const bunAdapter = _adapters.loadPrismaBunSqlite();
         PrismaBunSqlite = bunAdapter.PrismaBunSqlite;
       } catch (e) {
-        logger.error(
-          "prisma-adapter-bun-sqlite not available for SQLite Prisma client",
-          e as Error,
-        );
         throw new Error(
-          'Prisma SQLite adapter is unavailable. Install dependency "prisma-adapter-bun-sqlite".',
+          'prisma-adapter-bun-sqlite is required for SQLite mode but could not be loaded. Run: bun add prisma-adapter-bun-sqlite'
         );
       }
       const dataDir = config.get("dataDir");

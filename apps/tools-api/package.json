@@ -1,6 +1,6 @@
 {
   "name": "@th0th-ai/tools-api",
-  "version": "1.0.3",
+  "version": "1.1.2",
   "author": "S1LV4",
   "description": "th0th REST API server - Semantic code search, memory, and context compression",
   "type": "module",
@@ -13,8 +13,10 @@
   ],
   "scripts": {
     "dev": "bun --watch src/index.ts",
+    "dev:insecure": "NODE_TLS_REJECT_UNAUTHORIZED=0 bun --watch src/index.ts",
     "start": "bun src/index.ts",
-    "build": "bun build src/index.ts --outdir=dist --target=bun",
+    "start:insecure": "NODE_TLS_REJECT_UNAUTHORIZED=0 bun src/index.ts",
+    "build": "bun build src/index.ts --outdir=dist --target=bun --external prisma-adapter-bun-sqlite --external pg --external @prisma/adapter-pg",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

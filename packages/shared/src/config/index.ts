@@ -94,6 +94,14 @@ export interface ServerConfig {
   };
 }
 
+/** Read an env var as a number; falls back to `fallback` when unset, empty, or non-finite. */
+function envNum(key: string, fallback: number): number {
+  const s = process.env[key];
+  if (s === undefined || s === "") return fallback;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 /**
  * Get global data directory
  * Creates ~/.rlm/ directory for all projects
@@ -115,16 +123,16 @@ export const defaultConfig: ServerConfig = {
 
   cache: {
     l1: {
-      maxSize: 100 * 1024 * 1024, // 100 MB
-      defaultTTL: 300, // 5 minutes
+      maxSize: envNum("L1_CACHE_MAX_SIZE", 100 * 1024 * 1024),
+      defaultTTL: envNum("L1_CACHE_TTL", 300),
     },
     l2: {
-      dbPath: path.join(getGlobalDataDir(), "cache.db"),
-      maxSize: 500 * 1024 * 1024, // 500 MB
-      defaultTTL: 3600, // 1 hour
+      dbPath: process.env.CACHE_DB_PATH || path.join(getGlobalDataDir(), "cache.db"),
+      maxSize: envNum("L2_CACHE_MAX_SIZE", 500 * 1024 * 1024),
+      defaultTTL: envNum("L2_CACHE_TTL", 3600),
     },
     embedding: {
-      dbPath: path.join(getGlobalDataDir(), "embedding-cache.db"),
+      dbPath: process.env.EMBEDDING_CACHE_DB_PATH || path.join(getGlobalDataDir(), "embedding-cache.db"),
       maxAgeHours: 168, // 7 days
     },
   },
@@ -143,8 +151,8 @@ export const defaultConfig: ServerConfig = {
 
   compression: {
     defaultStrategy: "code_structure",
-    minTokensForCompression: 100,
-    targetCompressionRatio: 0.7, // 70% reduction
+    minTokensForCompression: envNum("MIN_TOKENS_FOR_COMPRESSION", 100),
+    targetCompressionRatio: envNum("TARGET_COMPRESSION_RATIO", 0.7),
     llm: {
       enabled: process.env.RLM_LLM_ENABLED === "true",
       baseUrl: process.env.RLM_LLM_BASE_URL || "https://api.openai.com/v1",
@@ -158,13 +166,13 @@ export const defaultConfig: ServerConfig = {
   },
 
   rateLimit: {
-    requestsPerMinute: 60,
-    tokensPerMinute: 100000,
+    requestsPerMinute: envNum("REQUESTS_PER_MINUTE", 60),
+    tokensPerMinute: envNum("TOKENS_PER_MINUTE", 100000),
   },
 
   security: {
-    maxInputLength: 100000,
-    sanitizeInputs: true,
+    maxInputLength: envNum("MAX_INPUT_LENGTH", 100000),
+    sanitizeInputs: process.env.SANITIZE_INPUTS !== "false",
     maxIndexSize: 100000, // max files to index
     maxFileSize: 1024 * 1024, // 1MB per file
     allowedExtensions: [
@@ -192,6 +200,7 @@ export const defaultConfig: ServerConfig = {
       "build/**",
       ".next/**",
       "coverage/**",
+      "**/generated/**",
       "*.min.js",
       "*.min.css",
     ],

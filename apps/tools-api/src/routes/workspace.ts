@@ -267,6 +267,42 @@ export const workspaceRoutes = new Elysia({ prefix: "/api/v1" })
   )
 
   .get(
+    "/workspace/:id/map",
+    async ({ params, query }) => {
+      try {
+        const projectId = params.id;
+        const centralityLimit = query.centralityLimit
+          ? parseInt(query.centralityLimit as string, 10)
+          : 20;
+        const recentLimit = query.recentLimit
+          ? parseInt(query.recentLimit as string, 10)
+          : 10;
+
+        const map = await symbolGraphService.getProjectMap(projectId, {
+          centralityLimit,
+          recentLimit,
+        });
+
+        if (!map) {
+          return { success: false, error: `Workspace '${projectId}' not found` };
+        }
+
+        return { success: true, data: map };
+      } catch (error) {
+        return { success: false, error: (error as Error).message };
+      }
+    },
+    {
+      detail: {
+        tags: ["workspace"],
+        summary: "Project map — aggregate view of an indexed workspace",
+        description:
+          "Returns stats, top central files (PageRank), symbols grouped by kind, files grouped by extension, and recently indexed files. Query params: centralityLimit (default 20), recentLimit (default 10).",
+      },
+    },
+  )
+
+  .get(
     "/symbol/centrality/:projectId",
     async ({ params, query }) => {
       try {

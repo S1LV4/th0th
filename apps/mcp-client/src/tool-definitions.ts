@@ -356,6 +356,34 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
 
   {
+    name: "th0th_project_map",
+    description:
+      "Aggregate view of an indexed project: overall stats (files/chunks/symbols/status/lastIndexedAt), top central files by PageRank (the dependency backbone), symbols grouped by kind (function/class/interface/type/etc.), files grouped by extension (language distribution), and the most-recently indexed files. Use this as a one-shot 'what's in this project?' summary.",
+    apiEndpoint: "/api/v1/workspace/:id/map",
+    apiMethod: "GET",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          description: "The project ID (as registered via th0th_index_project).",
+        },
+        centralityLimit: {
+          type: "number",
+          description: "Max number of top central files to include. Default 20.",
+          default: 20,
+        },
+        recentLimit: {
+          type: "number",
+          description: "Max number of recently indexed files to include. Default 10.",
+          default: 10,
+        },
+      },
+      required: ["id"],
+    },
+  },
+
+  {
     name: "th0th_search_definitions",
     description:
       "Search for symbol definitions (functions, classes, variables, types, interfaces) in an indexed project. Returns name, kind, file location, line numbers, and doc comments.",
@@ -368,7 +396,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           type: "string",
           description: "The project ID to search in",
         },
-        query: {
+        search: {
           type: "string",
           description: "Substring search on symbol name (case-insensitive)",
         },

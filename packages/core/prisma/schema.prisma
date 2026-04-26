@@ -280,7 +280,7 @@ model EmbeddingCache {
 // CRUD operations can use Prisma for type safety.
 
 // Base template for vector documents - NOT USED DIRECTLY
-// Dynamic tables created per dimension: vector_documents_1024d, vector_documents_3072d
+// Dynamic tables created per dimension: vector_documents_1024d, vector_documents_1536d, vector_documents_3072d
 model VectorDocument1024 {
   id         String                         @id
   projectId  String                         @map("project_id")
@@ -292,6 +292,19 @@ model VectorDocument1024 {
 
   @@index([projectId])
   @@map("vector_documents_1024d")
+}
+
+model VectorDocument1536 {
+  id         String                         @id
+  projectId  String                         @map("project_id")
+  content    String
+  metadata   Json                           @default("{}")
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime                       @default(now()) @map("created_at")
+  updatedAt  DateTime                       @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@map("vector_documents_1536d")
 }
 
 model VectorDocument3072 {

@@ -39,12 +39,21 @@ describe("VectorStoreFactory", () => {
   beforeEach(async () => {
     // Reset state between tests
     await resetVectorStore();
-    
-    // Clear relevant env vars
+
+    // Clear all env vars that can trigger Postgres or non-Ollama providers.
+    // DATABASE_URL must also be cleared — the factory falls back to it as the
+    // Postgres connection string, so leaving it set causes PostgresVectorStore
+    // to be selected even when VECTOR_STORE_TYPE / POSTGRES_VECTOR_URL are unset.
     delete process.env.VECTOR_STORE_TYPE;
     delete process.env.POSTGRES_VECTOR_URL;
     delete process.env.POSTGRES_VECTOR_POOL_SIZE;
     delete process.env.POSTGRES_VECTOR_INDEX;
+    delete process.env.DATABASE_URL;
+    // Prevent new embedding providers from trying live endpoints during tests
+    delete process.env.LITELLM_BASE_URL;
+    delete process.env.CUSTOM_EMBEDDING_BASE_URL;
+    delete process.env.AI_GATEWAY_API_KEY;
+    delete process.env.VERCEL_AI_GATEWAY_API_KEY;
   });
 
   afterEach(async () => {
@@ -161,12 +170,22 @@ describe("VectorStoreFactory", () => {
 
 // ── Usage Pattern Tests (for documentation) ──────────────────
 describe("Usage Patterns", () => {
+  const savedEnv = { ...process.env };
+
   beforeEach(async () => {
     await resetVectorStore();
+    delete process.env.DATABASE_URL;
+    delete process.env.VECTOR_STORE_TYPE;
+    delete process.env.POSTGRES_VECTOR_URL;
+    delete process.env.LITELLM_BASE_URL;
+    delete process.env.CUSTOM_EMBEDDING_BASE_URL;
+    delete process.env.AI_GATEWAY_API_KEY;
+    delete process.env.VERCEL_AI_GATEWAY_API_KEY;
   });
 
   afterEach(async () => {
     await resetVectorStore();
+    Object.assign(process.env, savedEnv);
   });
 
   test("recommended test setup pattern", async () => {

@@ -519,6 +519,65 @@ export class SymbolRepositoryPg {
     }));
   }
 
+  /**
+   * Aggregates used to build a project map in a single round trip:
+   * symbols grouped by kind, files grouped by extension, and the most
+   * recently indexed files (absolute timestamp for the caller to format).
+   */
+  async getProjectMapAggregates(
+    projectId: string,
+    recentLimit: number = 10,
+  ): Promise<{
+    symbolsByKind: Record<string, number>;
+    filesByLanguage: Record<string, number>;
+    recentFiles: Array<{ filePath: string; indexedAt: number | null }>;
+  }> {
+    const p = getPrismaClient();
+
+    const [kindRows, langRows, recentRows] = await Promise.all([
+      p.$queryRaw<{ kind: string; count: bigint }[]>`
+        SELECT kind, COUNT(*)::bigint AS count
+        FROM symbol_definitions
+        WHERE project_id = ${projectId}
+        GROUP BY kind
+        ORDER BY count DESC
+      `,
+      // Postgres-native extension extraction; NULLIF avoids treating files
+      // without a dot as extension "" (they fall under "other").
+      p.$queryRaw<{ ext: string | null; count: bigint }[]>`
+        SELECT LOWER(NULLIF(SUBSTRING(relative_path FROM '\\.([^./\\\\]+)$'), '')) AS ext,
+               COUNT(*)::bigint AS count
+        FROM symbol_files
+        WHERE project_id = ${projectId}
+        GROUP BY ext
+        ORDER BY count DESC
+      `,
+      p.$queryRaw<{ relative_path: string; indexed_at: Date }[]>`
+        SELECT relative_path, indexed_at
+        FROM symbol_files
+        WHERE project_id = ${projectId}
+        ORDER BY indexed_at DESC
+        LIMIT ${recentLimit}
+      `,
+    ]);
+
+    const symbolsByKind: Record<string, number> = {};
+    for (const row of kindRows) symbolsByKind[row.kind] = Number(row.count);
+
+    const filesByLanguage: Record<string, number> = {};
+    for (const row of langRows) {
+      const key = row.ext ?? "other";
+      filesByLanguage[key] = Number(row.count);
+    }
+
+    const recentFiles = recentRows.map((r) => ({
+      filePath: r.relative_path,
+      indexedAt: r.indexed_at ? r.indexed_at.getTime() : null,
+    }));
+
+    return { symbolsByKind, filesByLanguage, recentFiles };
+  }
+
   async getCentrality(projectId: string): Promise<Map<string, number>> {
     const p = getPrismaClient();
     const rows = await p.$queryRaw<{ file_path: string; score: number }[]>`

@@ -22,6 +22,7 @@ interface SearchProjectParams {
   exclude?: string[];
   explainScores?: boolean;
   format?: "json" | "toon";
+  sessionId?: string;
 }
 
 export class SearchProjectTool implements IToolHandler {
@@ -89,6 +90,10 @@ export class SearchProjectTool implements IToolHandler {
         enum: ["json", "toon"],
         description: "Output format (json or toon)",
         default: "toon",
+      },
+      sessionId: {
+        type: "string",
+        description: "Session ID for search hook scoping (enables session memory persistence)",
       },
     },
     required: ["query", "projectId"],

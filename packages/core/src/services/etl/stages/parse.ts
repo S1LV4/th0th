@@ -25,6 +25,19 @@ import type {
 
 const BATCH_SIZE = 20;
 
+function resolveChunkerMaxChars(): number | undefined {
+  // Global override takes highest precedence
+  const global = Number(process.env.EMBEDDING_MAX_CHARS);
+  if (Number.isFinite(global) && global > 0) return Math.floor(global * 0.9);
+
+  // Provider-specific override (OLLAMA_, VERCEL_, LITELLM_, CUSTOM_, GOOGLE_, MISTRAL_, …)
+  const provider = (process.env.EMBEDDING_PROVIDER || "ollama").toUpperCase();
+  const providerVal = Number(process.env[`${provider}_EMBEDDING_MAX_CHARS`]);
+  if (Number.isFinite(providerVal) && providerVal > 0) return Math.floor(providerVal * 0.9);
+
+  return undefined; // fall back to DEFAULT_CONFIG.maxChunkChars in smart-chunker
+}
+
 export class ParseStage {
   async run(ctx: EtlStageContext, files: DiscoveredFile[]): Promise<ParsedFile[]> {
     const t0 = performance.now();
@@ -88,7 +101,12 @@ export class ParseStage {
       const content = await fs.readFile(file.absolutePath, "utf-8");
       const ext = path.extname(file.relativePath).toLowerCase();
 
-      const chunks = smartChunk(content, file.relativePath);
+      const chunkerMaxChars = resolveChunkerMaxChars();
+      const chunks = smartChunk(
+        content,
+        file.relativePath,
+        chunkerMaxChars ? { maxChunkChars: chunkerMaxChars } : {},
+      );
       const symbols = this.extractSymbols(content, ext);
       const rawImports = this.extractImports(content, ext);
 
