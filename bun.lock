@@ -15,7 +15,7 @@
     },
     "apps/mcp-client": {
       "name": "@th0th-ai/mcp-client",
-      "version": "1.0.3",
+      "version": "1.1.3",
       "bin": {
         "th0th": "dist/index.js",
         "th0th-config": "dist/config-cli.js",
@@ -25,13 +25,14 @@
         "@th0th-ai/shared": "workspace:*",
       },
       "devDependencies": {
+        "@types/bun": "^1.3.9",
         "@types/node": "^22.10.5",
         "typescript": "^5.8.3",
       },
     },
     "apps/opencode-plugin": {
       "name": "@th0th-ai/opencode-plugin",
-      "version": "1.0.3",
+      "version": "1.1.3",
       "bin": {
         "th0th-config": "dist/config-cli.js",
       },
@@ -48,7 +49,7 @@
     },
     "apps/tools-api": {
       "name": "@th0th-ai/tools-api",
-      "version": "1.0.3",
+      "version": "1.1.3",
       "bin": {
         "th0th-api": "dist/index.js",
       },
@@ -67,7 +68,7 @@
     },
     "packages/core": {
       "name": "@th0th-ai/core",
-      "version": "1.0.3",
+      "version": "1.1.3",
       "dependencies": {
         "@ai-sdk/cohere": "^3.0.17",
         "@ai-sdk/google": "^3.0.19",
@@ -99,7 +100,7 @@
     },
     "packages/shared": {
       "name": "@th0th-ai/shared",
-      "version": "1.0.3",
+      "version": "1.1.3",
       "dependencies": {
         "dotenv": "^17.2.3",
       },
