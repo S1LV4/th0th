@@ -22,6 +22,7 @@ interface SearchProjectParams {
   exclude?: string[];
   explainScores?: boolean;
   format?: "json" | "toon";
+  sessionId?: string;
 }
 
 export class SearchProjectTool implements IToolHandler {
