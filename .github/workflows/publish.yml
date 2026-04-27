@@ -3,9 +3,10 @@ name: Build and Publish
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 env:
-  NPM_TAG: latest
+  NPM_TAG: ${{ github.event_name == 'release' && 'latest' || 'next' }}
   FORCE_PUBLISH: '--tolerate-republish'
 
 jobs:
@@ -159,8 +160,9 @@ jobs:
         with:
           images: s1lv4/th0th
           tags: |
-            type=raw,value=api-${{ steps.version.outputs.version }}
-            type=raw,value=api-latest
+            type=raw,value=api-${{ steps.version.outputs.version }},enable=${{ github.event_name == 'release' }}
+            type=raw,value=api-latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=api-new,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Docker meta for MCP
         id: meta-mcp
@@ -168,8 +170,9 @@ jobs:
         with:
           images: s1lv4/th0th
           tags: |
-            type=raw,value=mcp-${{ steps.version.outputs.version }}
-            type=raw,value=mcp-latest
+            type=raw,value=mcp-${{ steps.version.outputs.version }},enable=${{ github.event_name == 'release' }}
+            type=raw,value=mcp-latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=mcp-new,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push API image
         uses: docker/build-push-action@v6
