@@ -514,7 +514,7 @@ export class ContextualSearchRLM {
   ): Promise<SearchResult[]> {
     await this.ensureInitialized();
     const maxResults = options.maxResults || 10;
-    const minScore = options.minScore || 0.3;
+    const minScore = options.minScore ?? 0.3;
     const explainScores = options.explainScores || false;
     const includeFilters = options.includeFilters;
     const excludeFilters = options.excludeFilters;

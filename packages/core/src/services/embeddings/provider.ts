@@ -382,7 +382,11 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
                   if (embedding.some(v => isNaN(v) || !isFinite(v))) {
                     throw new Error("Invalid embedding response: contains NaN or Infinity values");
                   }
-                  
+
+                  if (embedding.every(v => v === 0)) {
+                    throw new Error("Invalid embedding response: all-zero vector (model returned degenerate embedding)");
+                  }
+
                   return embedding;
                 });
               }
@@ -545,6 +549,11 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
                   if (emb.some((v) => isNaN(v) || !isFinite(v))) {
                     throw new Error(
                       "Invalid embedding response: contains NaN or Infinity values",
+                    );
+                  }
+                  if (emb.every((v) => v === 0)) {
+                    throw new Error(
+                      "Invalid embedding response: all-zero vector (model returned degenerate embedding)",
                     );
                   }
                 }
