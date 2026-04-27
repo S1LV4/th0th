@@ -4,37 +4,10 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      target:
-        description: 'What to publish'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - packages
-          - apps
-          - docker
-      tag:
-        description: 'npm tag (latest, next, beta, alpha)'
-        required: false
-        default: 'latest'
-        type: string
-      dry-run:
-        description: 'Dry run (no actual publish)'
-        required: false
-        default: false
-        type: boolean
-      force-publish:
-        description: 'Force publish even if version already exists (uses --tolerate-republish)'
-        required: false
-        default: true
-        type: boolean
 
 env:
-  NPM_TAG: ${{ inputs.tag || 'latest' }}
-  DRY_RUN: ${{ inputs.dry-run == true && '--dry-run' || '' }}
-  FORCE_PUBLISH: ${{ (inputs.force-publish == true || github.event_name == 'release') && '--tolerate-republish' || '' }}
+  NPM_TAG: ${{ github.event_name == 'release' && 'latest' || 'next' }}
+  FORCE_PUBLISH: '--tolerate-republish'
 
 jobs:
   build:
@@ -91,10 +64,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: DEPLOY
-    if: >-
-      github.event_name == 'release' ||
-      inputs.target == 'all' ||
-      inputs.target == 'packages'
     permissions:
       contents: read
       id-token: write
@@ -112,13 +81,13 @@ jobs:
 
       - name: Publish @th0th-ai/shared
         working-directory: packages/shared
-        run: bun publish --access public --tag ${{ env.NPM_TAG }} ${{ env.FORCE_PUBLISH }} ${{ env.DRY_RUN }}
+        run: bun publish --access public --tag ${{ env.NPM_TAG }} ${{ env.FORCE_PUBLISH }}
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @th0th-ai/core
         working-directory: packages/core
-        run: bun publish --access public --tag ${{ env.NPM_TAG }} ${{ env.FORCE_PUBLISH }} ${{ env.DRY_RUN }}
+        run: bun publish --access public --tag ${{ env.NPM_TAG }} ${{ env.FORCE_PUBLISH }}
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -126,10 +95,6 @@ jobs:
     needs: [build, publish-packages]
     runs-on: ubuntu-latest
     environment: DEPLOY
-    if: >-
-      github.event_name == 'release' ||
-      inputs.target == 'all' ||
-      inputs.target == 'apps'
     permissions:
       contents: read
       id-token: write
@@ -147,19 +112,19 @@ jobs:
 
       - name: Publish @th0th-ai/tools-api
         working-directory: apps/tools-api
-        run: bun publish --access public --tag ${{ env.NPM_TAG }} ${{ env.FORCE_PUBLISH }} ${{ env.DRY_RUN }}
+        run: bun publish --access public --tag ${{ env.NPM_TAG }} ${{ env.FORCE_PUBLISH }}
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @th0th-ai/mcp-client
         working-directory: apps/mcp-client
-        run: bun publish --access public --tag ${{ env.NPM_TAG }} ${{ env.FORCE_PUBLISH }} ${{ env.DRY_RUN }}
+        run: bun publish --access public --tag ${{ env.NPM_TAG }} ${{ env.FORCE_PUBLISH }}
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @th0th-ai/opencode-plugin
         working-directory: apps/opencode-plugin
-        run: bun publish --access public --tag ${{ env.NPM_TAG }} ${{ env.FORCE_PUBLISH }} ${{ env.DRY_RUN }}
+        run: bun publish --access public --tag ${{ env.NPM_TAG }} ${{ env.FORCE_PUBLISH }}
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -167,11 +132,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment: DEPLOY
-    if: >-
-      github.event_name == 'release' ||
-      inputs.target == 'all' ||
-      inputs.target == 'apps' ||
-      inputs.target == 'docker'
     permissions:
       contents: read
 
@@ -200,8 +160,9 @@ jobs:
         with:
           images: s1lv4/th0th
           tags: |
-            type=raw,value=api-${{ steps.version.outputs.version }}
-            type=raw,value=api-latest,enable=${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=raw,value=api-${{ steps.version.outputs.version }},enable=${{ github.event_name == 'release' }}
+            type=raw,value=api-latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=api-new,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Docker meta for MCP
         id: meta-mcp
@@ -209,8 +170,9 @@ jobs:
         with:
           images: s1lv4/th0th
           tags: |
-            type=raw,value=mcp-${{ steps.version.outputs.version }}
-            type=raw,value=mcp-latest,enable=${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=raw,value=mcp-${{ steps.version.outputs.version }},enable=${{ github.event_name == 'release' }}
+            type=raw,value=mcp-latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=mcp-new,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push API image
         uses: docker/build-push-action@v6
@@ -218,7 +180,7 @@ jobs:
           context: .
           target: api
           platforms: linux/amd64,linux/arm64
-          push: ${{ inputs.dry-run != true }}
+          push: true
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
           cache-from: type=gha
@@ -230,7 +192,7 @@ jobs:
           context: .
           target: mcp
           platforms: linux/amd64,linux/arm64
-          push: ${{ inputs.dry-run != true }}
+          push: true
           tags: ${{ steps.meta-mcp.outputs.tags }}
           labels: ${{ steps.meta-mcp.outputs.labels }}
           cache-from: type=gha
