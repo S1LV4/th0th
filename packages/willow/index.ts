@@ -28,7 +28,18 @@
  *
  *   import { WillowGraphStore } from "@th0th-ai/willow";
  *   const store = WillowGraphStore.getInstance();
+ *   // Set WILLOW_SOIL_ENABLED=true to opt-in to Willow replication
  *   await store.createEdge({ sourceId, targetId, relationType, weight });
+ *
+ * Opt-in behavior:
+ *   By default, WillowGraphStore does NOT replicate to Willow. This is intentional
+ *   to preserve user privacy — Willow access should be explicit. To enable:
+ *   export WILLOW_SOIL_ENABLED=true
+ *
+ * Access control:
+ *   Once enabled, written edges are subject to Willow's SAFE authentication and
+ *   SOIL collection-level ACLs. The th0th collection is under "th0th/*" scope.
+ *   Review your Willow fleet's access policies before enabling in production.
  *
  * Collection naming:
  *   Memory edges    → th0th/edges/<sourceId>/<targetId>/<relationType>
@@ -43,6 +54,18 @@
 import type { MemoryEdge, MemoryRelationType } from "@th0th-ai/shared";
 
 // ── Config ────────────────────────────────────────────────────────────────────
+
+/**
+ * WILLOW_SOIL_ENABLED: Opt-in flag to replicate th0th memories to Willow SOIL.
+ * Default: false (memories stay in th0th only).
+ * Set to "true" to enable Willow replication.
+ *
+ * Privacy note: When enabled, th0th memories are written to the Willow SOIL store.
+ * SOIL access is controlled by Willow's MCP authentication and SAFE gate.
+ * Review your Willow fleet's access policies before enabling.
+ */
+const SOIL_ENABLED =
+  process.env.WILLOW_SOIL_ENABLED?.toLowerCase() === "true" ?? false;
 
 const SOIL_URL =
   process.env.WILLOW_SOIL_URL ?? "http://localhost:8080";
@@ -64,6 +87,7 @@ interface SoilDeleteBody {
 }
 
 async function soilPut(body: SoilPutBody): Promise<boolean> {
+  if (!SOIL_ENABLED) return true; // Silent no-op when disabled
   try {
     const res = await fetch(`${SOIL_URL}/store/put`, {
       method: "POST",
@@ -179,11 +203,15 @@ export class WillowGraphStore {
   }
 
   constructor() {
-    if (!process.env.WILLOW_SOIL_URL) {
+    if (!SOIL_ENABLED) {
+      console.info(
+        "[WillowGraphStore] Willow SOIL replication disabled. " +
+        "Set WILLOW_SOIL_ENABLED=true to opt-in to Willow memory replication.",
+      );
+    } else if (!process.env.WILLOW_SOIL_URL) {
       console.warn(
-        "[WillowGraphStore] WILLOW_SOIL_URL not set — " +
-        "th0th memories will not replicate to Willow. " +
-        "Set WILLOW_SOIL_URL=http://localhost:8080 to enable.",
+        "[WillowGraphStore] WILLOW_SOIL_ENABLED=true but WILLOW_SOIL_URL not set. " +
+        "Set WILLOW_SOIL_URL=http://localhost:8080 (default) or configure your Willow endpoint.",
       );
     }
   }
