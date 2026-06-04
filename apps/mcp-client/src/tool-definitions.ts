@@ -454,6 +454,56 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
 
+  // ── File read ────────────────────────────────────────────────────────────
+
+  {
+    name: "th0th_read_file",
+    description:
+      "Read a specific file (or line range) with automatic compression, import extraction, and symbol metadata. " +
+      "Use this instead of the native Read tool or Bash grep when you have a filePath and lineStart/lineEnd from a th0th_search result — " +
+      "returns structured imports[], symbol definitions/references, and optionally compressed content. " +
+      "Pass lineStart/lineEnd to read only the relevant section (saves tokens).",
+    apiEndpoint: "/api/v1/file/read",
+    apiMethod: "POST",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: {
+          type: "string",
+          description: "File path (absolute, or relative to project root)",
+        },
+        projectId: {
+          type: "string",
+          description: "Project ID for symbol metadata (optional but recommended)",
+        },
+        lineStart: {
+          type: "number",
+          description: "First line to read, 1-indexed (default: start of file). Subtract 5-10 from search result lineStart for context.",
+        },
+        lineEnd: {
+          type: "number",
+          description: "Last line to read, 1-indexed (default: end of file). Add 5-10 to search result lineEnd for context.",
+        },
+        compress: {
+          type: "boolean",
+          description: "Auto-compress content > 100 lines to reduce tokens (default: true)",
+          default: true,
+        },
+        includeSymbols: {
+          type: "boolean",
+          description: "Include symbol definitions and references in the read range (default: true)",
+          default: true,
+        },
+        includeImports: {
+          type: "boolean",
+          description: "Extract and return the file's import statements (default: true)",
+          default: true,
+        },
+      },
+      required: ["filePath"],
+    },
+  },
+
   // ── Project reset ───────────────────────────────────────────────────────
 
   {
@@ -487,6 +537,143 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         },
       },
       required: ["projectId"],
+    },
+  },
+
+  // ── Synapse session management ───────────────────────────────────────────
+
+  {
+    name: "th0th_synapse_session",
+    description:
+      "Create (or resume) a Synapse cognitive session for a multi-step task. " +
+      "Returns a sessionId to pass as `synapseSessionId` on every subsequent th0th_search call. " +
+      "The session activates task alignment, agent affinity, the working-memory buffer, " +
+      "chain inhibition, and the adaptive confidence gate. " +
+      "Name sessions by intent: 'debug-auth', 'feature-payment', 'refactor-search'.",
+    apiEndpoint: "/api/v1/synapse/session",
+    apiMethod: "POST",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sessionId: {
+          type: "string",
+          description: "Reuse an existing session ID (omit to auto-generate). Use same ID across all turns of a task.",
+        },
+        agentId: { type: "string", description: "Stable agent identifier (e.g. 'claude-code')", default: "claude-code" },
+        workspaceId: { type: "string", description: "Project ID this session is scoped to" },
+        taskContext: { type: "string", description: "One-sentence description of the current task (used for task alignment scoring)" },
+        ttlMs: { type: "number", description: "Session TTL in ms (default: 15 min)", default: 900000 },
+      },
+      required: [],
+    },
+  },
+
+  {
+    name: "th0th_synapse_prime",
+    description:
+      "Seed the Synapse working-memory buffer with known-relevant results before searching. " +
+      "Call this at the start of a session with results from th0th_recall to warm the buffer — " +
+      "subsequent th0th_search calls will boost these results automatically.",
+    apiEndpoint: "/api/v1/synapse/session/:id/prime",
+    apiMethod: "POST",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Session ID from th0th_synapse_session" },
+        results: {
+          type: "array",
+          description: "Array of search results to seed into the buffer (from th0th_recall or th0th_search)",
+          items: { type: "object" },
+        },
+      },
+      required: ["id", "results"],
+    },
+  },
+
+  {
+    name: "th0th_synapse_access",
+    description:
+      "Record that the agent accessed a specific file/chunk during this session. " +
+      "Increases agent-affinity score for that file in future searches — results from " +
+      "frequently-accessed files get boosted. Call after reading or editing a file.",
+    apiEndpoint: "/api/v1/synapse/session/:id/access",
+    apiMethod: "POST",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Session ID from th0th_synapse_session" },
+        memoryId: { type: "string", description: "Memory/chunk ID that was accessed (from search result id field)" },
+        filePath: { type: "string", description: "File path that was accessed (alternative to memoryId)" },
+      },
+      required: ["id"],
+    },
+  },
+
+  // ── Symbol snippet ───────────────────────────────────────────────────────
+
+  {
+    name: "th0th_symbol_snippet",
+    description:
+      "Get the source code snippet for a specific file and line range from an indexed project. " +
+      "Faster than th0th_read_file when you already know the exact location — returns raw content without compression.",
+    apiEndpoint: "/api/v1/symbol/snippet",
+    apiMethod: "GET",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", description: "Project ID" },
+        file: { type: "string", description: "Relative file path" },
+        lineStart: { type: "number", description: "Start line (1-indexed, default: 1)" },
+        lineEnd: { type: "number", description: "End line (default: entire file)" },
+      },
+      required: ["projectId", "file"],
+    },
+  },
+
+  // ── Memory list ──────────────────────────────────────────────────────────
+
+  {
+    name: "th0th_memory_list",
+    description:
+      "Browse stored memories for a project without a semantic query — useful when you want to " +
+      "see all decisions, patterns, or critical facts stored for a project. " +
+      "Use th0th_recall for semantic search, th0th_memory_list for browsing/auditing.",
+    apiEndpoint: "/api/v1/memory/list",
+    apiMethod: "POST",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", description: "Filter by project ID" },
+        type: { type: "string", description: "Filter by memory type: critical | decision | pattern | code | conversation" },
+        minImportance: { type: "number", description: "Minimum importance score (0-1, default: 0)" },
+        limit: { type: "number", description: "Max results to return (default: 50)", default: 50 },
+        offset: { type: "number", description: "Pagination offset (default: 0)", default: 0 },
+      },
+      required: [],
+    },
+  },
+
+  // ── Workspace reindex ────────────────────────────────────────────────────
+
+  {
+    name: "th0th_reindex",
+    description:
+      "Force a full reindex of a project workspace — re-scans all files, regenerates embeddings, " +
+      "and rebuilds the symbol graph. Use when files have changed significantly and autoReindex " +
+      "on th0th_search is too slow (autoReindex only syncs up to 50 files at a time).",
+    apiEndpoint: "/api/v1/workspace/:id/reindex",
+    apiMethod: "POST",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Project ID to reindex" },
+        forceReindex: {
+          type: "boolean",
+          description: "Clear existing index before reindexing (default: false — incremental)",
+          default: false,
+        },
+      },
+      required: ["id"],
     },
   },
 ];
