@@ -148,15 +148,63 @@ Or run `./scripts/setup-vscode.sh` for automatic configuration.
 
 ## Available Tools
 
+### Indexing & Search
+
 | Tool | Description |
 |------|-------------|
-| `th0th_index` | Index a project directory for semantic search |
-| `th0th_search` | Semantic + keyword search with filters |
+| `th0th_index` | Index a project directory with semantic embeddings |
+| `th0th_index_status` | Poll background indexing job progress |
+| `th0th_search` | Hybrid semantic + keyword search with RRF ranking. Supports `responseMode=enriched` for full content + imports + parentSymbol in one call |
+| `th0th_reindex` | Force full reindex after a large refactor |
+| `th0th_reset_project` | Delete all indexed data for a project (vectors, symbols, memories) |
+| `th0th_list_projects` | List all indexed projects with status and file counts |
+| `th0th_project_map` | One-shot project summary: stats, top files by PageRank, symbol distribution |
+
+### Symbol Graph
+
+| Tool | Description |
+|------|-------------|
+| `th0th_search_definitions` | Find function/class/type definitions by name |
+| `th0th_get_references` | Find all usages of a symbol across the project |
+| `th0th_go_to_definition` | Jump to definition with file + line context |
+| `th0th_symbol_snippet` | Get raw code snippet by file + line range |
+| `th0th_read_file` | Read a file with symbol metadata and imports |
+
+### Memory
+
+| Tool | Description |
+|------|-------------|
 | `th0th_remember` | Store important information in persistent memory |
-| `th0th_recall` | Search stored memories from previous sessions |
-| `th0th_compress` | Compress context (keeps structure, removes details) |
+| `th0th_recall` | Semantic search over stored memories |
+| `th0th_memory_list` | Browse memories by type/importance (audit mode) |
+| `th0th_compress` | Compress context (keeps structure, removes detail) |
 | `th0th_optimized_context` | Search + compress in one call (max token efficiency) |
 | `th0th_analytics` | Usage patterns, cache performance, metrics |
+
+### Synapse (Cognitive Layer)
+
+Synapse is an optional post-retrieval modulation layer that improves result quality over a session by tracking task context, agent affinity, and working-memory. Enable by creating a session and passing `sessionId` to `th0th_search`.
+
+| Tool | Description |
+|------|-------------|
+| `th0th_synapse_session` | Create/resume a cognitive session scoped to a task |
+| `th0th_synapse_prime` | Seed working-memory buffer with recalled memories |
+| `th0th_synapse_access` | Record file access to boost that file in future searches |
+
+---
+
+## Search Quality Tuning
+
+Environment variables for fine-tuning retrieval (all optional):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SEARCH_DISABLE_KEYWORD` | `false` | Pure vector-only mode (+44% MRR on NL→code) |
+| `RRF_KEYWORD_BOOST` | `2.5` | Keyword weight multiplier for code queries |
+| `RRF_VECTOR_WEIGHT` | `0.3` | Vector similarity weight in final score blend |
+| `RRF_MAX_CHUNKS_PER_FILE` | `2` | Diversity cap — prevents one file monopolising results |
+| `SEARCH_MIN_SCORE` | `0.3` | Score threshold below which results are dropped |
+| `OLLAMA_EMBED_DELAY_MS` | `0` | Delay between Ollama embed calls (set >0 for CPU) |
 
 ---
 
@@ -282,10 +330,12 @@ th0th/
 
 | Component | Description |
 |-----------|-------------|
-| **Semantic Search** | Hybrid vector + keyword with RRF ranking |
+| **Semantic Search** | Hybrid vector + keyword with RRF ranking, `enriched` response mode |
+| **Synapse** | Post-retrieval cognitive modulation: task alignment, agent affinity, working-memory buffer |
+| **Symbol Graph** | PageRank-based centrality, definitions, references, go-to-definition |
 | **Embeddings** | Ollama (local) or Mistral/OpenAI API |
 | **Compression** | Rule-based code structure extraction (70-98% reduction) |
-| **Memory** | Persistent SQLite storage across sessions |
+| **Memory** | Persistent SQLite/PostgreSQL storage across sessions |
 | **Cache** | Multi-level L1/L2 with TTL |
 
 ---
