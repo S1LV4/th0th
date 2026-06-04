@@ -356,7 +356,7 @@ export class PostgresVectorStore extends BaseVectorStore {
   // ── Search ─────────────────────────────────────────────────────────────────
 
   async search(query: string, limit: number = 10, projectId?: string): Promise<SearchResult[]> {
-    const embedding = await this.embedContent(query);
+    const embedding = await this.embedContent(query, true);
     return this.searchByEmbedding(embedding, limit, projectId);
   }
 

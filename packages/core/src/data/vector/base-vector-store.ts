@@ -144,10 +144,18 @@ export abstract class BaseVectorStore implements IVectorStore {
    * @param content Text to embed
    * @returns Promise that resolves to embedding vector
    */
-  protected async embedContent(content: string): Promise<number[]> {
+  protected async embedContent(content: string, isQuery = false): Promise<number[]> {
     try {
       const provider = await this.getEmbeddingProvider();
-      return await provider.embedQuery(content);
+      // Asymmetric encoding: instruction-tuned models (qwen3, bge-m3) benefit from a
+      // task-specific prefix on queries while documents are embedded raw.
+      // EMBEDDING_QUERY_INSTRUCTION overrides the default instruction.
+      // Set to empty string to disable.
+      const instruction = process.env.EMBEDDING_QUERY_INSTRUCTION;
+      const text = isQuery && instruction
+        ? `${instruction}\nQuery:${content}`
+        : content;
+      return await provider.embedQuery(text);
     } catch (error) {
       logger.error('Failed to generate embedding', error as Error, { content: content.slice(0, 100) });
       throw error;
