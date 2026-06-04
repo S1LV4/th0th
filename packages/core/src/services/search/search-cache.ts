@@ -67,7 +67,13 @@ export class SearchCache {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    this.l2Db = new Database(finalPath);
+    try {
+      this.l2Db = new Database(finalPath, { create: true, readwrite: true });
+    } catch (err) {
+      logger.warn("SearchCache DB creation failed, retrying with empty file", { error: (err as Error).message });
+      fs.writeFileSync(finalPath, "");
+      this.l2Db = new Database(finalPath, { create: true, readwrite: true });
+    }
     this.initializeDatabase();
 
     logger.info("SearchCache initialized", {

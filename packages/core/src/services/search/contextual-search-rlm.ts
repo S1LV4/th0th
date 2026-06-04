@@ -216,7 +216,7 @@ export class ContextualSearchRLM {
       let errors = 0;
 
       // Process files in batches to avoid overloading
-      const BATCH_SIZE = 10;
+      const BATCH_SIZE = 20;
       let processedFiles = 0;
       for (let i = 0; i < filteredFiles.length; i += BATCH_SIZE) {
         const batch = filteredFiles.slice(i, i + BATCH_SIZE);
@@ -477,6 +477,9 @@ export class ContextualSearchRLM {
         lineEnd: chunk.lineEnd,
         label: chunk.label,
         centralityScore,
+        // Enrichment fields — pre-computed at index time to avoid grep at query time.
+        ...(chunk.fileImports && { fileImports: chunk.fileImports }),
+        ...(chunk.parentSymbol && { parentSymbol: chunk.parentSymbol }),
       },
     }));
 
@@ -573,14 +576,19 @@ export class ContextualSearchRLM {
     }
 
     try {
-      // Parallel search across vector store and keyword search
+      // Parallel search across vector store and keyword search.
+      // SEARCH_DISABLE_KEYWORD=true runs vector-only (tuning/benchmark knob).
+      // Keyword errors never kill the whole search — fall back to empty array.
+      const disableKeyword = process.env.SEARCH_DISABLE_KEYWORD === "true";
       const [vectorResults, keywordResults] = await Promise.all([
         this.vectorStore.search(query, maxResults * 2, projectId),
-        this.keywordSearch.searchWithFilter(
-          query,
-          { projectId },
-          maxResults * 2,
-        ),
+        disableKeyword
+          ? Promise.resolve([] as Awaited<ReturnType<typeof this.keywordSearch.searchWithFilter>>)
+          : this.keywordSearch.searchWithFilter(query, { projectId }, maxResults * 2)
+              .catch((err) => {
+                logger.warn("Keyword search failed — falling back to vector-only", { err: (err as Error).message });
+                return [] as Awaited<ReturnType<typeof this.keywordSearch.searchWithFilter>>;
+              }),
       ]);
 
       logger.debug("Search results retrieved", {
@@ -628,18 +636,33 @@ export class ContextualSearchRLM {
       //
       // Keyword-only results (no vectorScore) fall back to the normalized score
       // so they are still subject to some threshold.
-      const filtered = filteredByPattern
+      // Score threshold — use raw vector similarity when available (absolute measure),
+      // fall back to normalized RRF score for keyword-only results.
+      const aboveThreshold = filteredByPattern
         .filter((result) => {
           const meta = result.metadata as Record<string, unknown>;
           const rawVs = meta?._rrfRawVectorScore as number | undefined;
           return rawVs !== undefined ? rawVs >= minScore : result.score >= minScore;
         })
         .map((result) => {
-          // Strip the internal field before caching / returning to callers.
           const { _rrfRawVectorScore, ...cleanMeta } = result.metadata as Record<string, unknown>;
           return { ...result, metadata: cleanMeta };
-        })
-        .slice(0, maxResults);
+        });
+
+      // Diversity cap: limit chunks per file so a single dominant file
+      // (e.g. a large controller) can't monopolize all result slots.
+      // RRF_MAX_CHUNKS_PER_FILE=0 disables. Default: 2.
+      const maxChunksPerFile = Number(process.env.RRF_MAX_CHUNKS_PER_FILE ?? "2");
+      const fileChunkCount = new Map<string, number>();
+      const filtered = maxChunksPerFile > 0
+        ? aboveThreshold.filter((r) => {
+            const fp = (r.metadata as Record<string, unknown>)?.filePath as string ?? r.id;
+            const count = fileChunkCount.get(fp) ?? 0;
+            if (count >= maxChunksPerFile) return false;
+            fileChunkCount.set(fp, count + 1);
+            return true;
+          }).slice(0, maxResults)
+        : aboveThreshold.slice(0, maxResults);
 
       // Add context to results
       const withContext = await this.addContextToResults(filtered, projectId);
@@ -721,9 +744,10 @@ export class ContextualSearchRLM {
     const isCodeQuery = hasCodePattern(query);
 
     // Keyword weight multiplier (higher = more weight to keyword results)
-    // For code queries: 2.5x boost to keyword matches
+    // For code queries: 2.5x boost to keyword matches (override via RRF_KEYWORD_BOOST)
     // For general queries: 1.0x (equal weight)
-    const KEYWORD_BOOST = isCodeQuery ? 2.5 : 1.0;
+    const codeKeywordBoost = Number(process.env.RRF_KEYWORD_BOOST ?? "2.5");
+    const KEYWORD_BOOST = isCodeQuery ? codeKeywordBoost : 1.0;
 
     logger.debug("RRF fusion parameters", {
       query,
@@ -774,6 +798,10 @@ export class ContextualSearchRLM {
     // span the full [0, 1] range instead of being capped by a fixed constant.
     const maxRrfScore = sorted[0]?.rrfScore || 1;
 
+    // Final blend weight on raw vector similarity (rest goes to RRF rank score).
+    // Default 0.3 preserves prior behavior; override via RRF_VECTOR_WEIGHT.
+    const vectorWeight = Number(process.env.RRF_VECTOR_WEIGHT ?? "0.3");
+
     return sorted
       .map(
         (
@@ -790,9 +818,9 @@ export class ContextualSearchRLM {
           const rrfNormalized = rrfScore / maxRrfScore;
 
           // Combine RRF score with vector similarity for better relevance measurement
-          // Weight: 70% RRF (ranking-based) + 30% vector similarity (semantic)
+          // Weight: (1-vectorWeight) RRF (ranking-based) + vectorWeight vector similarity (semantic)
           const vectorSimilarity = vectorScore || 0;
-          const combinedScore = rrfNormalized * 0.7 + vectorSimilarity * 0.3;
+          const combinedScore = rrfNormalized * (1 - vectorWeight) + vectorSimilarity * vectorWeight;
 
           // Centrality boost: symbols with higher PageRank get a mild re-ranking bonus.
           // finalScore = combined_score * (1 + 0.2 * centralityScore)

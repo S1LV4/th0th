@@ -57,3 +57,6 @@ chromadb/
 
 # Local MCP configuration (contains developer-specific paths)
 .mcp.json
+
+# Benchmark datasets — large JSONL files downloaded from HuggingFace (CoIR)
+benchmarks/datasets/

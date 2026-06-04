@@ -18,7 +18,13 @@ export interface ProjectSearchInput {
   projectPath?: string;
   maxResults?: number;
   minScore?: number;
-  responseMode?: "summary" | "full";
+  /**
+   * - "summary": preview only (~70% token savings vs full)
+   * - "full": includes complete chunk content
+   * - "enriched": full content + fileImports + parentSymbol — best for dev assistance,
+   *   eliminates most grep/read_file calls for context
+   */
+  responseMode?: "summary" | "full" | "enriched";
   autoReindex?: boolean;
   include?: string[];
   exclude?: string[];
@@ -54,9 +60,19 @@ interface FormattedResult {
   lineStart?: number;
   lineEnd?: number;
   language?: string;
+  /** Full function/class signature (or first meaningful line) — no 150-char truncation */
   preview: string;
   explanation?: string;
+  /** Full chunk content (responseMode full or enriched) */
   content?: string;
+  /** Enclosing function/class name — pre-computed at index time */
+  parentSymbol?: string;
+  /** Top-level imports of the file — pre-computed at index time, eliminates grep for context */
+  fileImports?: string;
+  /** Index of this chunk within the file (0-based) */
+  chunkIndex?: number;
+  /** Total chunks in the file */
+  totalChunks?: number;
 }
 
 // ── Controller ───────────────────────────────────────────────
@@ -89,7 +105,7 @@ export class SearchController {
       projectId,
       projectPath,
       maxResults = 10,
-      minScore = 0.3,  // Reverted to 0.3: new algorithm produces more distributed scores
+      minScore = Number(process.env.SEARCH_MIN_SCORE ?? "0.3"),
       responseMode = "summary",
       autoReindex = false,
       include,
@@ -147,19 +163,26 @@ export class SearchController {
 
     // Format results
     const formattedResults = boostedResults.map((r) => {
+      const meta = (r.metadata ?? {}) as Record<string, unknown>;
       const base: FormattedResult = {
         id: r.id,
         score: r.score,
-        filePath: r.metadata?.filePath,
-        lineStart: r.metadata?.lineStart,
-        lineEnd: r.metadata?.lineEnd,
-        language: r.metadata?.language,
-        preview: this.generatePreview(r, query),  // Passar query para gerar preview contextual
-        ...(r.explanation && { explanation: r.explanation }),
+        filePath: meta.filePath as string,
+        lineStart: meta.lineStart as number | undefined,
+        lineEnd: meta.lineEnd as number | undefined,
+        language: meta.language as string | undefined,
+        preview: this.generatePreview(r, query),
+        chunkIndex: meta.chunkIndex as number | undefined,
+        totalChunks: meta.totalChunks as number | undefined,
       };
+      if (meta.parentSymbol) base.parentSymbol = meta.parentSymbol as string;
+      if (r.explanation) base.explanation = r.explanation;
 
-      if (responseMode === "full") {
+      if (responseMode === "full" || responseMode === "enriched") {
         base.content = r.content;
+      }
+      if (responseMode === "enriched") {
+        if (meta.fileImports) base.fileImports = meta.fileImports as string;
       }
 
       return base;
@@ -176,15 +199,24 @@ export class SearchController {
 
     // Add usage recommendations based on response mode
     if (responseMode === "summary" && formattedResults.length > 0) {
-      recommendations.push("Use Read(file, lineStart, lineEnd) for specific code snippets (60% token savings)");
-
+      recommendations.push(
+        "Use responseMode='enriched' to get full content + file imports + parentSymbol without extra tool calls"
+      );
       if (formattedResults.length >= 3) {
         recommendations.push("Use th0th_optimized_context(query) for compressed multi-file context");
       }
     }
 
     if (responseMode === "full") {
-      recommendations.push("Full mode uses ~3x more tokens. Consider summary mode + Read() for better efficiency");
+      recommendations.push(
+        "Try responseMode='enriched' — same content plus fileImports and parentSymbol, same token cost"
+      );
+    }
+
+    if (responseMode === "enriched" && formattedResults.length > 0) {
+      recommendations.push(
+        "Enriched mode: content + fileImports + parentSymbol included. Use chunkIndex/totalChunks to navigate adjacent chunks."
+      );
     }
 
     // Add project-specific recommendations
@@ -240,54 +272,58 @@ export class SearchController {
     return info;
   }
 
-  generatePreview(result: any, query?: string): string {
-    if (result.metadata?.context?.preview) {
-      return result.metadata.context.preview;
-    }
+  generatePreview(result: any, _query?: string): string {
+    // Priority: pre-computed preview stored during addContextToResults
+    if (result.metadata?.context?.preview) return result.metadata.context.preview;
 
     const content = result.content || "";
-    const lines = content
-      .split("\n")
-      .filter((l: string) => l.trim().length > 0);
+    const allLines = content.split("\n");
+    if (!allLines.some((l: string) => l.trim())) return "(empty)";
 
-    if (lines.length === 0) return "(empty)";
+    const lang = (result.metadata?.language as string) || "";
+    const isCode = /^(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|swift|dart|cpp|c|cs|rb|php)$/.test(lang);
 
-    // Se temos uma query, tentar encontrar linhas que contenham termos relevantes
-    if (query) {
-      const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
-      
-      // Primeiro, tentar encontrar linhas que contenham termos da query
-      for (const line of lines) {
-        const lowerLine = line.toLowerCase();
-        const hasQueryTerm = queryTerms.some(term => lowerLine.includes(term));
-        
-        if (hasQueryTerm) {
-          const trimmed = line.trim();
-          if (trimmed.length > 0 && !trimmed.startsWith("import ")) {
-            return trimmed.length > 150
-              ? trimmed.substring(0, 147) + "..."
-              : trimmed;
-          }
+    if (isCode) {
+      // Skip chunker-injected headers (// File: / // Section: / repeated labels)
+      const bodyLines = allLines.filter((l: string) => {
+        const t = l.trim();
+        return t && !t.startsWith("// File:") && !t.startsWith("// Section:");
+      });
+
+      // Collect up to 8 lines of the function/class signature (up to and including
+      // the line ending with `{`, `=>`, or `;`). This gives the AI the full
+      // signature — parameters, return type, generics — without truncation.
+      const sigLines: string[] = [];
+      for (const line of bodyLines) {
+        const t = line.trim();
+        // Skip pure comment/decorator lines at the top
+        if (sigLines.length === 0 && (t.startsWith("//") || t.startsWith("/*") || t.startsWith("*") || t.startsWith("@"))) continue;
+        // Skip bare import lines
+        if (sigLines.length === 0 && t.startsWith("import ")) continue;
+        sigLines.push(line.trimEnd());
+        // Signature ends at `{`, `=>`, or `;` — covers functions, arrow fns, interfaces
+        if (t.endsWith("{") || t.endsWith("=>") || t.endsWith(";") || t.endsWith(",")) {
+          if (t.endsWith("{") || t.endsWith("=>") || t.endsWith(";")) break;
         }
+        if (sigLines.length >= 8) break;
       }
+      if (sigLines.length > 0) return sigLines.join("\n");
     }
 
-    // Fallback: primeira linha significativa
-    const significantLine =
-      lines.find((l: string) => {
-        const t = l.trim();
-        return (
-          !t.startsWith("import ") &&
-          !t.startsWith("//") &&
-          !t.startsWith("/*") &&
-          !t.startsWith("*")
-        );
-      }) || lines[0];
-
-    const preview = significantLine.trim();
-    return preview.length > 150
-      ? preview.substring(0, 147) + "..."
-      : preview;
+    // Non-code (or unknown language): skip imports and comments, truncate at 150 chars.
+    const meaningful = allLines.find((l: string) => {
+      const t = l.trim();
+      return (
+        t &&
+        !t.startsWith("import ") &&
+        !t.startsWith("//") &&
+        !t.startsWith("#") &&
+        !t.startsWith("/*") &&
+        !t.startsWith("*")
+      );
+    }) || allLines.find((l: string) => l.trim()) || allLines[0];
+    const preview = meaningful.trimEnd();
+    return preview.length > 150 ? preview.substring(0, 147) + "..." : preview;
   }
 
   filterByPatterns(

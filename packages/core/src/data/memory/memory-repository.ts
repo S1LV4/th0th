@@ -265,12 +265,15 @@ export class MemoryRepository {
     // interpreting special characters (e.g. "-" as NOT operator).
     // Without quoting, "Agente-GT" would be parsed as "Agente NOT column:GT"
     // causing "no such column: GT" errors.
-    const ftsQuery = query
+    const ftsTokens = query
       .trim()
+      .replace(/[^\w\s]/gi, " ")
       .split(/\s+/)
       .filter((t) => t.length > 0)
-      .map((t) => `"${t.replace(/"/g, '""')}"`)
-      .join(" OR ");
+      .map((t) => `"${t.replace(/"/g, '""')}"`);
+
+    const ftsQuery = ftsTokens.join(" OR ");
+    const hasFts = ftsQuery.length > 0;
 
     const sql = `
       SELECT
@@ -279,14 +282,14 @@ export class MemoryRepository {
         m.importance, m.tags, m.embedding,
         m.created_at, m.access_count, m.last_accessed
       FROM memories m
-      JOIN memories_fts fts ON m.rowid = fts.rowid
+      ${hasFts ? "JOIN memories_fts fts ON m.rowid = fts.rowid" : ""}
       ${whereClause}
-      AND fts.content MATCH ?
-      ORDER BY m.importance DESC, m.created_at DESC
+      ${hasFts ? "AND fts.content MATCH ?" : ""}
+      ORDER BY ${hasFts ? "rank," : ""} m.importance DESC, m.created_at DESC
       LIMIT ?
     `;
 
-    params.push(ftsQuery);
+    if (hasFts) params.push(ftsQuery);
     params.push(filters.limit);
 
     return this.db.prepare(sql).all(...params) as MemoryRow[];

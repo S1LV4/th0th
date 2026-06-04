@@ -119,6 +119,7 @@ export class KeywordSearchPg {
     const searchTerms = query
       .toLowerCase()
       .split(/\s+/)
+      .map(t => t.replace(/[^a-z0-9_]/g, ''))
       .filter(t => t.length > 2)
       .map(t => `${t}:*`)
       .join(' | ');
@@ -168,6 +169,7 @@ export class KeywordSearchPg {
     const searchTerms = query
       .toLowerCase()
       .split(/\s+/)
+      .map(t => t.replace(/[^a-z0-9_]/g, ''))
       .filter(t => t.length > 2)
       .map(t => `${t}:*`)
       .join(' | ');

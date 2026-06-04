@@ -13,11 +13,14 @@ const ignore = (ignoreModule as unknown as { default: typeof ignoreModule }).def
 export const DEFAULT_EXTENSIONS = [".ts", ".js", ".tsx", ".jsx", ".dart", ".py"];
 
 export const DEFAULT_IGNORES = [
-  "node_modules/**",
-  ".git/**",
-  "dist/**",
-  "build/**",
-  "coverage/**",
+  // `**/` prefix required so these match anywhere in the tree (not just root).
+  // Without `**`, `node_modules/**` only ignores ./node_modules/ and misses
+  // packages/core/node_modules/ in monorepos.
+  "**/node_modules/**",
+  "**/.git/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/coverage/**",
   "*.db",
   "*.db-shm",
   "*.db-wal",

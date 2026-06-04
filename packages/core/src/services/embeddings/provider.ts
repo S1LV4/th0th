@@ -152,7 +152,9 @@ export class AISDKEmbeddingProvider implements EmbeddingProvider {
   
   // Ollama rate limiting: Mutex to prevent overwhelming the server
   private static ollamaMutex: Promise<void> = Promise.resolve();
-  private static readonly OLLAMA_DELAY_MS = 50; // 50ms between requests
+  // Delay between Ollama requests. CPU: set to 50ms to avoid overwhelming the server.
+  // GPU (default): 0ms — the model processes in pipeline and handles concurrent requests fine.
+  private static readonly OLLAMA_DELAY_MS = Number(process.env.OLLAMA_EMBED_DELAY_MS ?? "0");
 
   constructor(
     private readonly config: EmbeddingProviderConfig,

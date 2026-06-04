@@ -11,6 +11,37 @@ import { SearchProjectTool, SearchCodeTool } from "@th0th-ai/core";
 const searchProjectTool = new SearchProjectTool();
 const searchCodeTool = new SearchCodeTool();
 
+/**
+ * Normalize `include`/`exclude` array params sent as serialized strings.
+ * Handles clients (Python, curl) that serialize arrays as:
+ *   - JSON string:        '["src/**"]'
+ *   - Python-style:       "['src/**']"
+ *   - Single value:       "src/**"
+ */
+function normalizeArrayParam(value: unknown): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (Array.isArray(value)) return value as string[];
+  if (typeof value !== "string") return undefined;
+
+  // Try JSON parse first
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed as string[];
+  } catch { /* not JSON */ }
+
+  // Python-style list: ['a', 'b'] → replace ' with " then parse
+  const pythonMatch = value.match(/^\[(.+)\]$/);
+  if (pythonMatch) {
+    try {
+      const parsed = JSON.parse("[" + pythonMatch[1].replace(/'/g, '"') + "]");
+      if (Array.isArray(parsed)) return parsed as string[];
+    } catch { /* not Python-style */ }
+  }
+
+  // Single value
+  return [value];
+}
+
 export const searchRoutes = new Elysia({ prefix: "/api/v1/search" })
   .post(
     "/project",
@@ -18,6 +49,10 @@ export const searchRoutes = new Elysia({ prefix: "/api/v1/search" })
       return await searchProjectTool.handle(body);
     },
     {
+      transform({ body }: any) {
+        if (body.include !== undefined) body.include = normalizeArrayParam(body.include);
+        if (body.exclude !== undefined) body.exclude = normalizeArrayParam(body.exclude);
+      },
       body: t.Object({
         query: t.String({
           description: "Search query (natural language or keywords)",
@@ -36,8 +71,9 @@ export const searchRoutes = new Elysia({ prefix: "/api/v1/search" })
           }),
         ),
         responseMode: t.Optional(
-          t.Union([t.Literal("summary"), t.Literal("full")], {
+          t.Union([t.Literal("summary"), t.Literal("full"), t.Literal("enriched")], {
             default: "summary",
+            description: "'enriched' returns full content + fileImports + parentSymbol",
           }),
         ),
         autoReindex: t.Optional(t.Boolean({ default: false })),

@@ -16,7 +16,7 @@ interface SearchProjectParams {
   projectPath?: string;
   maxResults?: number;
   minScore?: number;
-  responseMode?: "summary" | "full";
+  responseMode?: "summary" | "full" | "enriched";
   autoReindex?: boolean;
   include?: string[];
   exclude?: string[];
@@ -55,9 +55,11 @@ export class SearchProjectTool implements IToolHandler {
       },
       responseMode: {
         type: "string",
-        enum: ["summary", "full"],
+        enum: ["summary", "full", "enriched"],
         description:
-          "Response format: 'summary' (preview only, saves 70% tokens) or 'full' (includes content)",
+          "Response format: 'summary' (signature preview only), 'full' (complete chunk content), " +
+          "'enriched' (full content + fileImports + parentSymbol — best for dev assistance, " +
+          "eliminates most grep/read_file calls for context)",
         default: "summary",
       },
       autoReindex: {

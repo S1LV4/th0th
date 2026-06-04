@@ -36,6 +36,10 @@ export interface Chunk {
   type: "heading_section" | "json_key" | "yaml_block" | "code_block" | "fixed";
   /** Optional label (heading text, JSON key, etc.) */
   label?: string;
+  /** Top-level import lines of the file — enrichment field pre-computed at index time */
+  fileImports?: string;
+  /** Enclosing function/class name — enrichment field pre-computed at index time */
+  parentSymbol?: string;
 }
 
 /**
